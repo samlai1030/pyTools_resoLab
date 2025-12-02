@@ -380,10 +380,10 @@ Total Latency:      ~350 ms (comfortable interactive response)
 ```bash
 # Direct Python
 /Users/samlai/miniconda3/envs/Local/bin/python \
-  /Users/samlai/Local_2/agent_test/SFR_app_v2.py
+  /Users/samlai/Local_2/pyTools_resoLab/SFR_app_v2.py
 
 # Using wrapper script
-/Users/samlai/Local_2/agent_test/run_sfr_app.sh
+/Users/samlai/Local_2/pyTools_resoLab/run_sfr_app.sh
 ```
 
 ### Running Tests
@@ -391,13 +391,13 @@ Total Latency:      ~350 ms (comfortable interactive response)
 ```bash
 # Full validation suite
 /Users/samlai/miniconda3/envs/Local/bin/python \
-  /Users/samlai/Local_2/agent_test/test_edge_detection.py
+  /Users/samlai/Local_2/pyTools_resoLab/test_edge_detection.py
 ```
 
 ### File Structure
 
 ```
-/Users/samlai/Local_2/agent_test/
+/Users/samlai/Local_2/pyTools_resoLab/
 ├── SFR_app_v2.py                      ✅ Main app (UPDATED)
 ├── SFR_app_v2_PyQt5.py                ✅ PyQt5 version (UPDATED)
 ├── test_edge_detection.py             ✅ Test suite (NEW)

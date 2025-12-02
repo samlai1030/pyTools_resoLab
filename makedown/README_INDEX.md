@@ -155,7 +155,7 @@ README_INDEX.md (This file)
 ### 1. **Start the Application**
 ```bash
 /Users/samlai/miniconda3/envs/Local/bin/python \
-  /Users/samlai/Local_2/agent_test/SFR_app_v2.py
+  /Users/samlai/Local_2/pyTools_resoLab/SFR_app_v2.py
 ```
 
 ### 2. **Load a Raw Image**

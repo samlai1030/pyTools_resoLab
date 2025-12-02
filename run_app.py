@@ -11,7 +11,7 @@ os.environ['QT_QPA_PLATFORM_PLUGIN_PATH'] = '/Users/samlai/miniconda3/envs/Local
 os.environ['QT_QPA_PLATFORM'] = 'cocoa'
 
 # Import and run the app
-sys.path.insert(0, '/Users/samlai/Local_2/agent_test')
+sys.path.insert(0, '/Users/samlai/Local_2/pyTools_resoLab')
 
 from SFR_app_v2 import *
 

@@ -488,7 +488,7 @@ Version: 1.0 Production
 
 ### Step 1: Verify Files
 ```bash
-cd /Users/samlai/Local_2/agent_test/
+cd /Users/samlai/Local_2/pyTools_resoLab/
 ls -la *.py *.md *.sh
 ```
 

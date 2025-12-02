@@ -19,7 +19,7 @@ fi
 if [ -f "/Users/samlai/Local_2/agent_test/.idea/misc.xml" ]; then
     echo "✅ misc.xml exists"
 fi
-if [ -f "/Users/samlai/Local_2/agent_test/.idea/workspace.xml" ]; then
+if [ -f "/Users/samlai/Local_2/pyTools_resoLab/.idea/workspace.xml" ]; then
     echo "✅ workspace.xml exists"
 fi
 echo ""
@@ -30,7 +30,7 @@ echo "2. Open /User#!/bin/bash
 echo "=========================================="
 echo "Fchecho "======echo "Fixing Module Conflict"
 echo "============/Uecho "======================st# Clear JetBrains cache
-echo "Clearing JetBrainsatechocat > /Users/samlai/Local_2/agent_test/IDE_SETUP_COMPLETE.txt << 'EOF'
+echo "Clearing JetBrainsatechocat > /Users/samlai/Local_2/pyTools_resoLab/IDE_SETUP_COMPLETE.txt << 'EOF'
 ================================================================================
 MODULE CONFLICT RESOLVED - IDE SETUP COMPLETE
 ================================================================================

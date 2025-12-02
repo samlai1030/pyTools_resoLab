@@ -8,7 +8,7 @@ import sys
 import numpy as np
 import cv2
 
-sys.path.insert(0, '/Users/samlai/Local_2/agent_test')
+sys.path.insert(0, '/Users/samlai/Local_2/pyTools_resoLab')
 from SFR_app_v2 import SFRCalculator
 
 

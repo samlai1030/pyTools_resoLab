@@ -4,7 +4,7 @@
 
 ```bash
 # Navigate to the project directory
-cd /Users/samlai/Local_2/agent_test
+cd /Users/samlai/Local_2/pyTools_resoLab
 
 # Install dependencies
 pip install -r requirements.txt
