@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Wrapper script to properly configure Qt environment and run main.py
+Wrapper script to properly configure Qt environment and run SFR_app_v2.py
 """
 import os
 import sys
@@ -13,7 +13,7 @@ os.environ['QT_QPA_PLATFORM'] = 'cocoa'
 # Import and run the app
 sys.path.insert(0, '/Users/samlai/Local_2/pyTools_resoLab')
 
-from main import *
+from SFR_app_v2 import *
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
