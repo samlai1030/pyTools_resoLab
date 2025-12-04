@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 
 import cv2
 import numpy as np
@@ -12,15 +13,19 @@ from PyQt5.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFileDialog,
+    QGroupBox,
     QHBoxLayout,
     QInputDialog,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QMainWindow,
     QMessageBox,
     QPushButton,
     QRadioButton,
     QScrollArea,
+    QSlider,
     QSpinBox,
     QVBoxLayout,
     QWidget,
@@ -259,7 +264,7 @@ class SFRCalculator:
         if roi_image is None or roi_image.size == 0:
             return "No Edge", 0, {}
 
-        # 轉為灰階
+        # 轉為灰阶
         gray = (
             roi_image
             if len(roi_image.shape) == 2
@@ -315,12 +320,16 @@ class SFRCalculator:
             return "Mixed", confidence, details
 
     @staticmethod
-    def validate_edge(roi_image):
+    def validate_edge(roi_image, threshold=50):
         """
         檢測是否為有效的 Slit Edge。
         判斷依據：
         1. 圖像梯度是否足夠強 (有邊緣)。
         2. 邊緣是否接近直線。
+
+        Parameters:
+        - roi_image: ROI 圖像
+        - threshold: 邊緣檢測閾值 (默認 50)
         """
         if roi_image is None or roi_image.size == 0:
             return False, "Empty ROI", "No Edge", 0
@@ -335,8 +344,8 @@ class SFRCalculator:
         sobely = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
         magnitude = np.sqrt(sobelx**2 + sobely**2)
 
-        # 簡單判定：最大梯度強度需大於某個閾值
-        if np.max(magnitude) < 50:
+        # 簡單判定：最大梯度強度需大於閾值
+        if np.max(magnitude) < threshold:
             return False, "Low Contrast / No Edge detected", "No Edge", 0
 
         # 檢測邊緣方向
@@ -379,7 +388,7 @@ class SFRCalculator:
         - esf: Edge Spread Function
         - lsf: Line Spread Function
         """
-        # 轉為灰階並正規化到 0-1 範圍
+        # 轉為灰阶並正規化到 0-1 範圍
         img = roi_image.astype(np.float64)
         if len(img.shape) == 3:
             img = np.mean(img, axis=2)
@@ -450,7 +459,6 @@ class SFRCalculator:
             esf = f_cubic(x_new)
 
         # Step 2: 亞像素邊緣位置檢測與對齐 (ISO 12233:2023 Section 7.2)
-        # ...existing code...
         # 找到 50% 點的位置（邊緣中心）
         esf_min = np.min(esf)
         esf_max = np.max(esf)
@@ -574,6 +582,11 @@ class ImageLabel(QLabel):
         self.roi_sfr_value = None  # Store SFR value to display at ROI corner
         self.roi_position = None  # Store ROI (x, y, w, h) for SFR display
         self._updating_zoom = False  # Guard flag to prevent recursion
+        # Panning support for VIEW mode
+        self.is_panning = False
+        self.pan_start_pos = None
+        self.pan_scroll_start_h = 0
+        self.pan_scroll_start_v = 0
         self.setMouseTracking(True)
         self.setAlignment(Qt.AlignTop | Qt.AlignLeft)
 
@@ -581,7 +594,34 @@ class ImageLabel(QLabel):
         if not self.pixmap_original:
             return
 
-        # Get current selection mode from parent window
+        # Right-click: Start panning (works in any mode)
+        if event.button() == Qt.RightButton:
+            self.is_panning = True
+            self.pan_start_pos = event.pos()
+            if self.scroll_area:
+                self.pan_scroll_start_h = self.scroll_area.horizontalScrollBar().value()
+                self.pan_scroll_start_v = self.scroll_area.verticalScrollBar().value()
+            self.setCursor(Qt.ClosedHandCursor)
+            return
+
+        # Check if VIEW mode (panning mode) is active for left-click
+        if self.parent_window and hasattr(self.parent_window, "view_mode"):
+            view_mode = self.parent_window.view_mode
+        else:
+            view_mode = "sfr"  # Default to SFR mode
+
+        if view_mode == "view":
+            # VIEW mode: Start panning with left-click too
+            if event.button() == Qt.LeftButton:
+                self.is_panning = True
+                self.pan_start_pos = event.pos()
+                if self.scroll_area:
+                    self.pan_scroll_start_h = self.scroll_area.horizontalScrollBar().value()
+                    self.pan_scroll_start_v = self.scroll_area.verticalScrollBar().value()
+                self.setCursor(Qt.ClosedHandCursor)
+            return
+
+        # SFR mode: Get current selection mode from parent window
         if self.parent_window and hasattr(self.parent_window, "selection_mode"):
             current_mode = self.parent_window.selection_mode
         else:
@@ -645,11 +685,36 @@ class ImageLabel(QLabel):
                 self.update()
 
     def mouseMoveEvent(self, event):
+        # Check if panning (right-click drag or VIEW mode)
+        if self.is_panning and self.scroll_area and self.pan_start_pos:
+            delta = event.pos() - self.pan_start_pos
+            self.scroll_area.horizontalScrollBar().setValue(
+                self.pan_scroll_start_h - delta.x()
+            )
+            self.scroll_area.verticalScrollBar().setValue(
+                self.pan_scroll_start_v - delta.y()
+            )
+            return
+
         if self.is_selecting and self.pixmap_original:
             self.selection_end = event.pos()
             self.update()
 
     def mouseReleaseEvent(self, event):
+        # Check if releasing from panning (right-click or left-click in VIEW mode)
+        if (event.button() == Qt.RightButton or event.button() == Qt.LeftButton) and self.is_panning:
+            self.is_panning = False
+            self.pan_start_pos = None
+            # Restore cursor based on view mode
+            if self.parent_window and hasattr(self.parent_window, "view_mode"):
+                if self.parent_window.view_mode == "view":
+                    self.setCursor(Qt.OpenHandCursor)
+                else:
+                    self.setCursor(Qt.ArrowCursor)
+            else:
+                self.setCursor(Qt.ArrowCursor)
+            return
+
         if event.button() == Qt.LeftButton and self.is_selecting:
             self.is_selecting = False
             if self.roi_callback:
@@ -842,6 +907,8 @@ class ImageLabel(QLabel):
 
 
 class MainWindow(QMainWindow):
+    RECENT_FILES_PATH = "recent_files.json"
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("pyTools_SFR_Analyzer")
@@ -849,6 +916,7 @@ class MainWindow(QMainWindow):
 
         # Data
         self.raw_data = None
+        self.display_data = None  # Store display data for edge overlay
         self.image_w = 640  # 預設，實際應由使用者輸入
         self.image_h = 640
 
@@ -858,13 +926,47 @@ class MainWindow(QMainWindow):
         # Selection mode: "drag" or "click"
         self.selection_mode = "drag"  # Default: drag to select
 
-        # Click select size (default 30x30)
-        self.click_select_size = 30
+        # Click select size (default 40x40)
+        self.click_select_size = 40
 
         # SFR stabilize filter enable/disable
         self.sfr_stabilize_enabled = False  # Default: disabled
 
+        # View mode: "sfr" for SFR analysis or "view" for panning
+        self.view_mode = "sfr"  # Default: SFR mode
+
+        # Edge detection threshold (adjustable via slider)
+        self.edge_threshold = 50  # Default: 50
+
+        # Edge detection display mode
+        self.edge_detect_enabled = False  # Show edge overlay on image
+        self.edge_overlay_applied = False  # Track if edge overlay is applied
+        self.locked_edge_mask = None  # Store locked edge pattern (frozen when Apply Edge clicked)
+
+        # Recent files list (max 10 files)
+        self.recent_files = []
+        self.max_recent_files = 10
+
+        self.load_recent_files()
         self.init_ui()
+
+    def closeEvent(self, event):
+        self.save_recent_files()
+        super().closeEvent(event)
+
+    def save_recent_files(self):
+        try:
+            with open(self.RECENT_FILES_PATH, "w") as f:
+                json.dump(self.recent_files, f)
+        except Exception as e:
+            print(f"Failed to save recent files: {e}")
+
+    def load_recent_files(self):
+        try:
+            with open(self.RECENT_FILES_PATH, "r") as f:
+                self.recent_files = json.load(f)
+        except Exception:
+            self.recent_files = []
 
     def init_ui(self):
         main_widget = QWidget()
@@ -882,6 +984,31 @@ class MainWindow(QMainWindow):
         self.btn_load.setMinimumHeight(35)
         self.btn_load.setStyleSheet("padding: 5px; font-size: 12px;")
         self.btn_load.clicked.connect(self.load_raw_file)
+
+        # Recent Files List Widget
+        recent_label = QLabel("Recent Files:")
+        recent_label.setStyleSheet("font-weight: bold; font-size: 10px; margin-top: 5px;")
+
+        self.recent_files_list = QListWidget()
+        self.recent_files_list.setMaximumHeight(80)
+        self.recent_files_list.setStyleSheet("""
+            QListWidget {
+                font-size: 10px;
+                border: 1px solid #ccc;
+                background: white;
+            }
+            QListWidget::item {
+                padding: 2px;
+            }
+            QListWidget::item:hover {
+                background: #e0e0e0;
+            }
+            QListWidget::item:selected {
+                background: #4CAF50;
+                color: white;
+            }
+        """)
+        self.recent_files_list.itemDoubleClicked.connect(self.on_recent_file_double_clicked)
 
         # Selection Mode Selection (NEW)
         mode_label = QLabel("Selection Mode:")
@@ -920,8 +1047,71 @@ class MainWindow(QMainWindow):
         mode_layout.addStretch()
 
         left_layout.addWidget(self.btn_load)
+        left_layout.addWidget(recent_label)
+        left_layout.addWidget(self.recent_files_list)
         left_layout.addWidget(mode_label)
         left_layout.addLayout(mode_layout)
+
+        # SFR / VIEW Mode Buttons (above image view)
+        view_mode_layout = QHBoxLayout()
+        view_mode_layout.setContentsMargins(0, 5, 0, 5)
+        view_mode_layout.setSpacing(5)
+
+        self.btn_sfr_mode = QPushButton("📊 SFR")
+        self.btn_sfr_mode.setCheckable(True)
+        self.btn_sfr_mode.setChecked(True)
+        self.btn_sfr_mode.setMinimumHeight(32)
+        self.btn_sfr_mode.setMinimumWidth(80)
+        self.btn_sfr_mode.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                font-weight: bold;
+                font-size: 12px;
+                border: 2px solid #388E3C;
+                border-radius: 5px;
+                padding: 5px 10px;
+            }
+            QPushButton:checked {
+                background-color: #2E7D32;
+                border: 2px solid #1B5E20;
+            }
+            QPushButton:hover {
+                background-color: #66BB6A;
+            }
+        """)
+        self.btn_sfr_mode.clicked.connect(self.on_sfr_mode_clicked)
+
+        self.btn_view_mode = QPushButton("🖐 VIEW")
+        self.btn_view_mode.setCheckable(True)
+        self.btn_view_mode.setChecked(False)
+        self.btn_view_mode.setMinimumHeight(32)
+        self.btn_view_mode.setMinimumWidth(80)
+        self.btn_view_mode.setStyleSheet("""
+            QPushButton {
+                background-color: #2196F3;
+                color: white;
+                font-weight: bold;
+                font-size: 12px;
+                border: 2px solid #1976D2;
+                border-radius: 5px;
+                padding: 5px 10px;
+            }
+            QPushButton:checked {
+                background-color: #1565C0;
+                border: 2px solid #0D47A1;
+            }
+            QPushButton:hover {
+                background-color: #42A5F5;
+            }
+        """)
+        self.btn_view_mode.clicked.connect(self.on_view_mode_clicked)
+
+        view_mode_layout.addWidget(self.btn_sfr_mode)
+        view_mode_layout.addWidget(self.btn_view_mode)
+        view_mode_layout.addStretch()
+
+        left_layout.addLayout(view_mode_layout)
 
         # Create image label
         self.image_label = ImageLabel(self)
@@ -941,7 +1131,6 @@ class MainWindow(QMainWindow):
         # Set scroll_area reference in image_label
         self.image_label.scroll_area = self.scroll_area
 
-        left_layout.addWidget(self.btn_load)
         left_layout.addWidget(self.scroll_area, 1)
 
         # Add ROI preview area with image and size info separated
@@ -1003,6 +1192,110 @@ class MainWindow(QMainWindow):
         stabilize_layout.addStretch()
 
         right_layout.addLayout(stabilize_layout)
+
+        # Edge Detection Threshold Slider
+        edge_threshold_layout = QHBoxLayout()
+        edge_threshold_layout.setContentsMargins(0, 5, 0, 5)
+
+        # Edge Detect Checkbox
+        self.edge_detect_checkbox = QCheckBox("Edge Detect")
+        self.edge_detect_checkbox.setChecked(False)
+        self.edge_detect_checkbox.setStyleSheet("font-size: 10px; font-weight: bold;")
+        self.edge_detect_checkbox.stateChanged.connect(self.on_edge_detect_changed)
+        edge_threshold_layout.addWidget(self.edge_detect_checkbox)
+
+        edge_label = QLabel("Threshold:")
+        edge_label.setStyleSheet("font-weight: bold; font-size: 10px;")
+        edge_threshold_layout.addWidget(edge_label)
+
+        self.edge_threshold_slider = QSlider(Qt.Horizontal)
+        self.edge_threshold_slider.setMinimum(10)
+        self.edge_threshold_slider.setMaximum(200)
+        self.edge_threshold_slider.setValue(50)
+        self.edge_threshold_slider.setTickPosition(QSlider.TicksBelow)
+        self.edge_threshold_slider.setTickInterval(20)
+        self.edge_threshold_slider.setMinimumWidth(120)
+        self.edge_threshold_slider.setStyleSheet("""
+            QSlider::groove:horizontal {
+                border: 1px solid #bbb;
+                background: #ddd;
+                height: 8px;
+                border-radius: 4px;
+            }
+            QSlider::handle:horizontal {
+                background: #4CAF50;
+                border: 1px solid #388E3C;
+                width: 16px;
+                margin: -4px 0;
+                border-radius: 8px;
+            }
+            QSlider::handle:horizontal:hover {
+                background: #66BB6A;
+            }
+            QSlider::sub-page:horizontal {
+                background: #4CAF50;
+                border-radius: 4px;
+            }
+        """)
+        self.edge_threshold_slider.valueChanged.connect(self.on_edge_threshold_changed)
+        edge_threshold_layout.addWidget(self.edge_threshold_slider)
+
+        self.edge_threshold_value_label = QLabel("50")
+        self.edge_threshold_value_label.setMinimumWidth(30)
+        self.edge_threshold_value_label.setStyleSheet("font-size: 11px; font-weight: bold; color: #388E3C;")
+        edge_threshold_layout.addWidget(self.edge_threshold_value_label)
+
+        # Apply Edge Button
+        self.btn_apply_edge = QPushButton("Apply Edge")
+        self.btn_apply_edge.setMinimumHeight(28)
+        self.btn_apply_edge.setMinimumWidth(80)
+        self.btn_apply_edge.setStyleSheet("""
+            QPushButton {
+                background-color: #FF9800;
+                color: white;
+                font-weight: bold;
+                font-size: 10px;
+                border: 1px solid #F57C00;
+                border-radius: 4px;
+                padding: 4px 8px;
+            }
+            QPushButton:hover {
+                background-color: #FFB74D;
+            }
+            QPushButton:pressed {
+                background-color: #E65100;
+            }
+        """)
+        self.btn_apply_edge.clicked.connect(self.on_apply_edge)
+        edge_threshold_layout.addWidget(self.btn_apply_edge)
+
+        # Erase Edge Button
+        self.btn_erase_edge = QPushButton("Erase Edge")
+        self.btn_erase_edge.setMinimumHeight(28)
+        self.btn_erase_edge.setMinimumWidth(80)
+        self.btn_erase_edge.setStyleSheet("""
+            QPushButton {
+                background-color: #9E9E9E;
+                color: white;
+                font-weight: bold;
+                font-size: 10px;
+                border: 1px solid #757575;
+                border-radius: 4px;
+                padding: 4px 8px;
+            }
+            QPushButton:hover {
+                background-color: #BDBDBD;
+            }
+            QPushButton:pressed {
+                background-color: #616161;
+            }
+        """)
+        self.btn_erase_edge.clicked.connect(self.on_erase_edge)
+        edge_threshold_layout.addWidget(self.btn_erase_edge)
+
+        edge_threshold_layout.addStretch()
+
+        right_layout.addLayout(edge_threshold_layout)
 
         # Info and Nyquist frequency controls
         info_ny_layout = QHBoxLayout()
@@ -1077,6 +1370,65 @@ class MainWindow(QMainWindow):
         layout.addLayout(left_layout, 1)
         layout.addLayout(right_layout, 1)
 
+    def add_to_recent_files(self, file_path):
+        if file_path in self.recent_files:
+            self.recent_files.remove(file_path)
+        self.recent_files.insert(0, file_path)
+        if len(self.recent_files) > self.max_recent_files:
+            self.recent_files = self.recent_files[:self.max_recent_files]
+        self.update_recent_files_list()
+
+    def update_recent_files_list(self):
+        self.recent_files_list.clear()
+        for f in self.recent_files:
+            self.recent_files_list.addItem(f)
+
+    def on_recent_file_double_clicked(self, item):
+        file_path = item.text()
+        if os.path.exists(file_path):
+            self.load_raw_file_from_path(file_path)
+        else:
+            QMessageBox.warning(self, "File Not Found", f"File not found: {file_path}")
+            self.recent_files.remove(file_path)
+            self.update_recent_files_list()
+
+    def load_raw_file_from_path(self, fname):
+        # This is a refactor of load_raw_file to allow loading from a given path (no dialog)
+        if not fname:
+            return
+        file_size = os.path.getsize(fname)
+        detected_w, detected_h, detected_dtype = self.auto_detect_raw_dimensions(file_size)
+        if detected_w > 0 and detected_h > 0:
+            self.image_w = detected_w
+            self.image_h = detected_h
+        w = self.image_w
+        h = self.image_h
+        dtype_options = {"uint8": np.uint8, "uint16": np.uint16, "float32": np.float32}
+        dtype_choice = detected_dtype if detected_dtype in dtype_options else "uint16"
+        selected_dtype = dtype_options[dtype_choice]
+        try:
+            self.raw_data = read_raw_image(
+                fname, width=w, height=h, dtype=selected_dtype
+            )
+            if self.raw_data is not None:
+                if self.raw_data.dtype != np.uint8:
+                    display_data = (
+                        (self.raw_data - self.raw_data.min())
+                        / (self.raw_data.max() - self.raw_data.min() + 1e-10)
+                        * 255
+                    ).astype(np.uint8)
+                else:
+                    display_data = self.raw_data
+                self.display_image(display_data)
+                self.info_label.setText(
+                    f"Loaded: {fname} ({w}x{h}, {dtype_choice})"
+                )
+                self.add_to_recent_files(fname)
+            else:
+                QMessageBox.critical(self, "Error", "Failed to read raw file")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Error reading raw file: {str(e)}")
+
     def load_raw_file(self):
         fname, _ = QFileDialog.getOpenFileName(
             self, "Open Raw File", "", "Raw Files (*.raw);;All Files (*)"
@@ -1084,13 +1436,22 @@ class MainWindow(QMainWindow):
         if not fname:
             return
 
-        # Get image dimensions
-        w, ok = QInputDialog.getInt(self, "Raw Config", "Width:", self.image_w)
+        # Auto-detect image dimensions based on file size
+        file_size = os.path.getsize(fname)
+        detected_w, detected_h, detected_dtype = self.auto_detect_raw_dimensions(file_size)
+
+        # Use detected values as defaults
+        if detected_w > 0 and detected_h > 0:
+            self.image_w = detected_w
+            self.image_h = detected_h
+
+        # Get image dimensions (with auto-detected defaults)
+        w, ok = QInputDialog.getInt(self, "Raw Config", f"Width (auto-detected: {detected_w}):", self.image_w)
         if not ok:
             return
         self.image_w = w
 
-        h, ok2 = QInputDialog.getInt(self, "Raw Config", "Height:", self.image_h)
+        h, ok2 = QInputDialog.getInt(self, "Raw Config", f"Height (auto-detected: {detected_h}):", self.image_h)
         if not ok2:
             return
         self.image_h = h
@@ -1098,8 +1459,17 @@ class MainWindow(QMainWindow):
         # Get data type
         dtype_options = {"uint8": np.uint8, "uint16": np.uint16, "float32": np.float32}
         dtype_names = list(dtype_options.keys())
+        # Set default index based on detected dtype
+        default_idx = 1  # Default to uint16
+        if detected_dtype == "uint8":
+            default_idx = 0
+        elif detected_dtype == "uint16":
+            default_idx = 1
+        elif detected_dtype == "float32":
+            default_idx = 2
+
         dtype_choice, ok3 = QInputDialog.getItem(
-            self, "Raw Config", "Data Type:", dtype_names, 1
+            self, "Raw Config", "Data Type:", dtype_names, default_idx
         )
         if not ok3:
             return
@@ -1127,22 +1497,104 @@ class MainWindow(QMainWindow):
                 self.info_label.setText(
                     f"Loaded: {fname} ({self.image_w}x{self.image_h}, {dtype_choice})"
                 )
+                self.add_to_recent_files(fname)
             else:
                 QMessageBox.critical(self, "Error", "Failed to read raw file")
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error reading raw file: {str(e)}")
 
+    def auto_detect_raw_dimensions(self, file_size):
+        """
+        Auto-detect raw image dimensions based on file size.
+        Returns (width, height, dtype_name) tuple.
+        Common raw image sizes are checked.
+        """
+        # Common raw image dimensions to check
+        common_sizes = [
+            # (width, height, bytes_per_pixel, dtype_name)
+            # 8-bit common sizes
+            (640, 480, 1, "uint8"),      # VGA
+            (800, 600, 1, "uint8"),      # SVGA
+            (1024, 768, 1, "uint8"),     # XGA
+            (1280, 720, 1, "uint8"),     # HD 720p
+            (1280, 960, 1, "uint8"),
+            (1920, 1080, 1, "uint8"),    # Full HD
+            (2048, 1536, 1, "uint8"),    # 3MP
+            (2592, 1944, 1, "uint8"),    # 5MP
+            (3264, 2448, 1, "uint8"),    # 8MP
+            (4032, 3024, 1, "uint8"),    # 12MP
+            (4096, 2160, 1, "uint8"),    # 4K
+            # 16-bit common sizes
+            (640, 480, 2, "uint16"),
+            (800, 600, 2, "uint16"),
+            (1024, 768, 2, "uint16"),
+            (1280, 720, 2, "uint16"),
+            (1280, 960, 2, "uint16"),
+            (1920, 1080, 2, "uint16"),
+            (2048, 1536, 2, "uint16"),
+            (2592, 1944, 2, "uint16"),
+            (3264, 2448, 2, "uint16"),
+            (4032, 3024, 2, "uint16"),
+            (4096, 2160, 2, "uint16"),
+            # Square sizes (common for test patterns)
+            (256, 256, 1, "uint8"),
+            (256, 256, 2, "uint16"),
+            (512, 512, 1, "uint8"),
+            (512, 512, 2, "uint16"),
+            (640, 640, 1, "uint8"),
+            (640, 640, 2, "uint16"),
+            (1024, 1024, 1, "uint8"),
+            (1024, 1024, 2, "uint16"),
+            (2048, 2048, 1, "uint8"),
+            (2048, 2048, 2, "uint16"),
+            (4096, 4096, 1, "uint8"),
+            (4096, 4096, 2, "uint16"),
+        ]
+
+        # Check each common size
+        for w, h, bpp, dtype_name in common_sizes:
+            expected_size = w * h * bpp
+            if file_size == expected_size:
+                return (w, h, dtype_name)
+
+        # Try to find square image dimensions
+        for bpp, dtype_name in [(1, "uint8"), (2, "uint16"), (4, "float32")]:
+            pixels = file_size // bpp
+            side = int(np.sqrt(pixels))
+            if side * side * bpp == file_size:
+                return (side, side, dtype_name)
+
+        # Try common aspect ratios (4:3, 16:9, 3:2)
+        for bpp, dtype_name in [(2, "uint16"), (1, "uint8")]:
+            pixels = file_size // bpp
+            # 4:3 aspect ratio
+            h = int(np.sqrt(pixels * 3 / 4))
+            w = int(h * 4 / 3)
+            if w * h * bpp == file_size:
+                return (w, h, dtype_name)
+            # 16:9 aspect ratio
+            h = int(np.sqrt(pixels * 9 / 16))
+            w = int(h * 16 / 9)
+            if w * h * bpp == file_size:
+                return (w, h, dtype_name)
+            # 3:2 aspect ratio
+            h = int(np.sqrt(pixels * 2 / 3))
+            w = int(h * 3 / 2)
+            if w * h * bpp == file_size:
+                return (w, h, dtype_name)
+
+        # Could not detect, return defaults
+        return (640, 640, "uint16")
+
     def display_image(self, numpy_img):
         """將 NumPy array 轉換為 QPixmap 顯示"""
         # 簡單的顯示轉換，不處理 Demosaic，直接顯示 Raw 亮度
         disp_img = numpy_img.astype(np.uint8)
         h, w = disp_img.shape
-        bytes_per_line = w
-        q_img = QImage(
-            disp_img.tobytes(), w, h, bytes_per_line, QImage.Format_Grayscale8
-        )
-        pixmap = QPixmap.fromImage(q_img)
+
+        # Store display data for edge overlay
+        self.display_data = disp_img.copy()
 
         # Reset zoom level for new image
         self.image_label.zoom_level = 1.0
@@ -1151,12 +1603,25 @@ class MainWindow(QMainWindow):
         self.image_label.image_w = w
         self.image_label.image_h = h
 
-        # Store original pixmap
-        self.image_label.pixmap_original = pixmap
-        self.image_label.pixmap_scaled = pixmap
+        # Check if locked edge pattern exists (Apply Edge was clicked)
+        if self.edge_overlay_applied and self.locked_edge_mask is not None:
+            # Use the locked edge pattern on new image
+            self.display_with_locked_edge()
+        else:
+            # Show original image without edge
+            bytes_per_line = w
+            q_img = QImage(
+                disp_img.tobytes(), w, h, bytes_per_line, QImage.Format_Grayscale8
+            )
+            pixmap = QPixmap.fromImage(q_img)
 
-        # Set initial display size
-        self.image_label.setPixmap(pixmap)
+            # Store original pixmap
+            self.image_label.pixmap_original = pixmap
+            self.image_label.pixmap_scaled = pixmap
+
+            # Set initial display size
+            self.image_label.setPixmap(pixmap)
+
         self.image_label.setMinimumSize(640, 640)
         self.image_label.setMaximumSize(16777215, 16777215)
 
@@ -1217,6 +1682,184 @@ class MainWindow(QMainWindow):
             self.ny_freq_input.setText("0.5")
             self.info_label.setText("Invalid Nyquist frequency value")
 
+    def on_edge_threshold_changed(self):
+        """Handle edge detection threshold slider change"""
+        self.edge_threshold = self.edge_threshold_slider.value()
+        self.edge_threshold_value_label.setText(str(self.edge_threshold))
+
+        # If edge is locked (Apply Edge was clicked), don't update - keep locked pattern
+        if self.locked_edge_mask is not None:
+            self.info_label.setText(f"🔒 Edge LOCKED - Threshold change ignored (click Erase Edge to unlock)")
+            return
+
+        # Update edge display if edge detect is enabled (preview mode only)
+        if self.edge_detect_enabled and self.raw_data is not None:
+            self.update_edge_display()
+        else:
+            self.info_label.setText(f"🔍 Edge Detection Threshold: {self.edge_threshold}")
+
+    def on_edge_detect_changed(self):
+        """Handle edge detect checkbox change"""
+        self.edge_detect_enabled = self.edge_detect_checkbox.isChecked()
+
+        # If edge is locked, use locked pattern
+        if self.locked_edge_mask is not None:
+            if self.edge_detect_enabled:
+                self.display_with_locked_edge()
+                self.info_label.setText(f"🔒 Edge LOCKED - Showing fixed reference pattern")
+            else:
+                self.show_image_without_edge()
+                self.info_label.setText("❌ Edge Detect: OFF (locked pattern still saved)")
+            return
+
+        if self.edge_detect_enabled:
+            if self.raw_data is not None:
+                self.update_edge_display()
+                self.info_label.setText(f"✅ Edge Detect: ON (Threshold: {self.edge_threshold})")
+            else:
+                self.info_label.setText("⚠️ Load an image first to see edge detection")
+        else:
+            # Restore original image
+            if self.display_data is not None:
+                self.show_image_without_edge()
+            self.info_label.setText("❌ Edge Detect: OFF")
+
+    def update_edge_display(self):
+        """Update the image display with thin edge overlay using Canny"""
+        if self.raw_data is None or self.display_data is None:
+            return
+
+        # Use Canny edge detection for thin edges
+        # Threshold slider controls the lower threshold, upper is 2x lower
+        lower_threshold = self.edge_threshold
+        upper_threshold = self.edge_threshold * 2
+
+        # Apply Canny edge detection (produces thin, clean edges)
+        edges = cv2.Canny(self.display_data, lower_threshold, upper_threshold)
+
+        # Create edge mask (Canny outputs 255 for edges, 0 for non-edges)
+        edge_mask = edges > 0
+
+        # Create RGB image for display (edges in red)
+        h, w = self.display_data.shape
+        rgb_image = np.zeros((h, w, 3), dtype=np.uint8)
+        rgb_image[:, :, 0] = self.display_data  # Red channel
+        rgb_image[:, :, 1] = self.display_data  # Green channel
+        rgb_image[:, :, 2] = self.display_data  # Blue channel
+
+        # Overlay edges in red color
+        rgb_image[edge_mask, 0] = 255  # Red
+        rgb_image[edge_mask, 1] = 0    # Green
+        rgb_image[edge_mask, 2] = 0    # Blue
+
+        # Convert to QImage and display
+        bytes_per_line = 3 * w
+        q_img = QImage(rgb_image.tobytes(), w, h, bytes_per_line, QImage.Format_RGB888)
+        pixmap = QPixmap.fromImage(q_img)
+
+        # Update image label
+        self.image_label.pixmap_original = pixmap
+        self.image_label.update_zoomed_image()
+
+        # Count edge pixels
+        edge_count = np.sum(edge_mask)
+        edge_percent = edge_count / (h * w) * 100
+        self.info_label.setText(f"🔍 Edge Detect: {edge_count} pixels ({edge_percent:.1f}%) | Threshold: {self.edge_threshold}")
+
+    def show_image_without_edge(self):
+        """Restore original grayscale image without edge overlay"""
+        if self.display_data is None:
+            return
+
+        h, w = self.display_data.shape
+        bytes_per_line = w
+        q_img = QImage(self.display_data.tobytes(), w, h, bytes_per_line, QImage.Format_Grayscale8)
+        pixmap = QPixmap.fromImage(q_img)
+
+        self.image_label.pixmap_original = pixmap
+        self.image_label.update_zoomed_image()
+
+    def on_apply_edge(self):
+        """Apply and LOCK edge overlay - edge pattern becomes fixed reference"""
+        if self.raw_data is None:
+            self.info_label.setText("⚠️ Load an image first")
+            return
+
+        # Calculate and lock the edge pattern
+        lower_threshold = self.edge_threshold
+        upper_threshold = self.edge_threshold * 2
+        edges = cv2.Canny(self.display_data, lower_threshold, upper_threshold)
+        self.locked_edge_mask = edges > 0  # Store the locked edge pattern
+
+        self.edge_detect_checkbox.setChecked(True)
+        self.edge_detect_enabled = True
+        self.edge_overlay_applied = True
+
+        # Display with locked edge
+        self.display_with_locked_edge()
+        self.info_label.setText(f"🔒 Edge LOCKED (Threshold: {self.edge_threshold}) - Pattern fixed as reference")
+
+    def on_erase_edge(self):
+        """Remove edge overlay from the image display and clear locked pattern"""
+        if self.display_data is None:
+            self.info_label.setText("⚠️ No image loaded")
+            return
+
+        self.edge_detect_checkbox.setChecked(False)
+        self.edge_detect_enabled = False
+        self.edge_overlay_applied = False
+        self.locked_edge_mask = None  # Clear the locked edge pattern
+        self.show_image_without_edge()
+        self.info_label.setText("🧹 Edge Erased - Locked pattern cleared")
+
+    def display_with_locked_edge(self):
+        """Display current image with the locked edge pattern overlay"""
+        if self.display_data is None or self.locked_edge_mask is None:
+            return
+
+        h, w = self.display_data.shape
+        edge_h, edge_w = self.locked_edge_mask.shape
+
+        # Create RGB image for display
+        rgb_image = np.zeros((h, w, 3), dtype=np.uint8)
+        rgb_image[:, :, 0] = self.display_data
+        rgb_image[:, :, 1] = self.display_data
+        rgb_image[:, :, 2] = self.display_data
+
+        # Overlay locked edges in red (handle size mismatch)
+        min_h = min(h, edge_h)
+        min_w = min(w, edge_w)
+        edge_region = self.locked_edge_mask[:min_h, :min_w]
+        rgb_image[:min_h, :min_w, 0][edge_region] = 255  # Red
+        rgb_image[:min_h, :min_w, 1][edge_region] = 0    # Green
+        rgb_image[:min_h, :min_w, 2][edge_region] = 0    # Blue
+
+        # Convert to QImage and display
+        bytes_per_line = 3 * w
+        q_img = QImage(rgb_image.tobytes(), w, h, bytes_per_line, QImage.Format_RGB888)
+        pixmap = QPixmap.fromImage(q_img)
+
+        self.image_label.pixmap_original = pixmap
+        self.image_label.update_zoomed_image()
+
+    def on_sfr_mode_clicked(self):
+        """Switch to SFR analysis mode"""
+        self.view_mode = "sfr"
+        self.btn_sfr_mode.setChecked(True)
+        self.btn_view_mode.setChecked(False)
+        # Reset cursor to arrow
+        self.image_label.setCursor(Qt.ArrowCursor)
+        self.info_label.setText("📊 SFR Mode: Click or drag to select ROI for analysis")
+
+    def on_view_mode_clicked(self):
+        """Switch to VIEW (panning) mode"""
+        self.view_mode = "view"
+        self.btn_sfr_mode.setChecked(False)
+        self.btn_view_mode.setChecked(True)
+        # Set cursor to open hand
+        self.image_label.setCursor(Qt.OpenHandCursor)
+        self.info_label.setText("🖐 VIEW Mode: Click and drag to pan the image")
+
     def process_roi(self, rect):
         """處理使用者選取的區域 with optional stabilize filter"""
         if self.raw_data is None:
@@ -1234,8 +1877,8 @@ class MainWindow(QMainWindow):
         # Display ROI preview
         self.display_roi_preview(roi)
 
-        # 4. Detect Slit Edge and Edge Orientation
-        is_edge, msg, edge_type, confidence = SFRCalculator.validate_edge(roi)
+        # 4. Detect Slit Edge and Edge Orientation (using adjustable threshold)
+        is_edge, msg, edge_type, confidence = SFRCalculator.validate_edge(roi, threshold=self.edge_threshold)
 
         if is_edge:
             if self.sfr_stabilize_enabled:
@@ -1299,9 +1942,9 @@ class MainWindow(QMainWindow):
 
             roi_sample = self.raw_data[roi_y : roi_y + h, roi_x : roi_x + w]
 
-            # Validate edge
+            # Validate edge (using adjustable threshold)
             is_edge, msg, edge_type_check, confidence = SFRCalculator.validate_edge(
-                roi_sample
+                roi_sample, threshold=self.edge_threshold
             )
 
             if is_edge and confidence > 50:  # Minimum confidence threshold
@@ -1454,6 +2097,13 @@ class MainWindow(QMainWindow):
         lsf_x = (
             np.arange(len(lsf)) / SUPERSAMPLING_FACTOR
         )  # Scale back to original pixel coordinates
+
+        # If peak is on negative side, invert the LSF
+        max_val = np.max(lsf)
+        min_val = np.min(lsf)
+        if abs(min_val) > abs(max_val):
+            lsf = -lsf  # Invert LSF
+
         self.ax_lsf.plot(lsf_x, lsf, "r-", linewidth=2)
         self.ax_lsf.set_title(
             "LSF (Line Spread Function) - Derivative of ESF",
@@ -1463,6 +2113,69 @@ class MainWindow(QMainWindow):
         self.ax_lsf.set_xlabel("Position (original pixels)", fontsize=9)
         self.ax_lsf.set_ylabel("Derivative Magnitude", fontsize=9)
         self.ax_lsf.grid(True, alpha=0.3)
+
+        # Calculate and display FWHM for LSF
+        try:
+            # 1. Detect the highest peak position (use absolute value)
+            lsf_abs = np.abs(lsf)
+            peak_idx = np.argmax(lsf_abs)
+            peak_val = lsf_abs[peak_idx]
+            peak_x = lsf_x[peak_idx]
+
+            if peak_val > 0:
+                half_max = peak_val / 2
+
+                # 2. Find FWHM - search left and right from peak for half-max crossing
+                # Left side: search from peak towards left
+                left_x = None
+                for i in range(peak_idx, 0, -1):
+                    if lsf_abs[i] >= half_max and lsf_abs[i-1] < half_max:
+                        # Interpolate to find exact crossing point
+                        x_a, x_b = lsf_x[i-1], lsf_x[i]
+                        y_a, y_b = lsf_abs[i-1], lsf_abs[i]
+                        if y_b != y_a:
+                            left_x = x_a + (half_max - y_a) * (x_b - x_a) / (y_b - y_a)
+                        else:
+                            left_x = x_a
+                        break
+
+                # Right side: search from peak towards right
+                right_x = None
+                for i in range(peak_idx, len(lsf_abs) - 1):
+                    if lsf_abs[i] >= half_max and lsf_abs[i+1] < half_max:
+                        # Interpolate to find exact crossing point
+                        x_a, x_b = lsf_x[i], lsf_x[i+1]
+                        y_a, y_b = lsf_abs[i], lsf_abs[i+1]
+                        if y_b != y_a:
+                            right_x = x_a + (half_max - y_a) * (x_b - x_a) / (y_b - y_a)
+                        else:
+                            right_x = x_b
+                        break
+
+                if left_x is not None and right_x is not None and right_x > left_x:
+                    fwhm = right_x - left_x
+
+                    # Draw vertical lines for FWHM
+                    self.ax_lsf.axvline(x=left_x, color="purple", linestyle="--", alpha=0.7, linewidth=1.5)
+                    self.ax_lsf.axvline(x=right_x, color="purple", linestyle="--", alpha=0.7, linewidth=1.5)
+
+                    # Draw horizontal line at half-max
+                    self.ax_lsf.hlines(y=half_max, xmin=left_x, xmax=right_x, color="purple", linestyle="-", alpha=0.5, linewidth=1)
+
+                    # Add text box for FWHM value
+                    self.ax_lsf.text(
+                        peak_x,
+                        peak_val * 0.85,
+                        f"FWHM: {fwhm:.2f} px",
+                        fontsize=10,
+                        fontweight="bold",
+                        color="purple",
+                        ha="center",
+                        va="top",
+                        bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="purple", alpha=0.9),
+                    )
+        except Exception as e:
+            print(f"Could not calculate FWHM: {e}")
 
         # Plot 3: SFR/MTF Result
         # Multiply frequencies by 4 to compensate for supersampling
