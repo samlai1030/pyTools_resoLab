@@ -1,0 +1,845 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1800</width>
+    <height>1000</height>
+   </rect>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>1400</width>
+    <height>800</height>
+   </size>
+  </property>
+  <property name="windowTitle">
+   <string>pyTools SFR Analyzer</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">
+QMainWindow {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #f5f7fa, stop:1 #e4e8ed);
+}
+QGroupBox {
+    font-weight: bold;
+    font-size: 13px;
+    color: #2c3e50;
+    border: 2px solid #bdc3c7;
+    border-radius: 10px;
+    margin-top: 14px;
+    padding-top: 12px;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #f8f9fa);
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 14px;
+    padding: 2px 10px;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3498db, stop:1 #2980b9);
+    color: white;
+    border-radius: 5px;
+    font-weight: bold;
+    font-size: 13px;
+}
+QPushButton {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3498db, stop:1 #2980b9);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 24px;
+    font-size: 13px;
+    font-weight: bold;
+    min-height: 40px;
+}
+QPushButton:hover {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5dade2, stop:1 #3498db);
+    border: 2px solid #2980b9;
+}
+QPushButton:pressed {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2471a3, stop:1 #1a5276);
+}
+QPushButton:focus {
+    outline: none;
+    border: 2px solid #2980b9;
+}
+QRadioButton {
+    font-size: 13px;
+    color: #2c3e50;
+    spacing: 10px;
+    padding: 6px 4px;
+    min-height: 28px;
+}
+QRadioButton::indicator {
+    width: 20px;
+    height: 20px;
+}
+QRadioButton::indicator:checked {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3498db, stop:1 #2980b9);
+    border: 2px solid #2980b9;
+    border-radius: 10px;
+}
+QRadioButton::indicator:unchecked {
+    background: white;
+    border: 2px solid #bdc3c7;
+    border-radius: 10px;
+}
+QComboBox {
+    background: white;
+    border: 2px solid #bdc3c7;
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-size: 12px;
+    min-width: 140px;
+    min-height: 32px;
+}
+QComboBox:hover {
+    border-color: #3498db;
+    border-width: 2px;
+}
+QComboBox:focus {
+    border-color: #3498db;
+    background: #f9fafb;
+}
+QComboBox::drop-down {
+    border: none;
+    width: 35px;
+}
+QComboBox::down-arrow {
+    width: 14px;
+    height: 14px;
+}
+QSpinBox, QLineEdit {
+    background: white;
+    border: 2px solid #bdc3c7;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 12px;
+    min-height: 32px;
+}
+QSpinBox:hover, QLineEdit:hover {
+    border-color: #3498db;
+}
+QSpinBox:focus, QLineEdit:focus {
+    border-color: #3498db;
+    background: #f9fafb;
+}
+QCheckBox {
+    font-size: 13px;
+    color: #2c3e50;
+    spacing: 10px;
+    padding: 6px 4px;
+    min-height: 30px;
+}
+QCheckBox::indicator {
+    width: 22px;
+    height: 22px;
+    border-radius: 5px;
+}
+QCheckBox::indicator:unchecked {
+    background: white;
+    border: 2px solid #bdc3c7;
+}
+QCheckBox::indicator:checked {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #27ae60, stop:1 #1e8449);
+    border: 2px solid #1e8449;
+}
+QLabel {
+    color: #2c3e50;
+    font-size: 12px;
+}
+QLabel#title_label {
+    font-size: 14px;
+    font-weight: bold;
+    color: #2c3e50;
+}
+QScrollArea {
+    border: 2px solid #bdc3c7;
+    border-radius: 8px;
+    background: #ecf0f1;
+}
+   </string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QHBoxLayout" name="main_layout">
+    <property name="leftMargin">
+     <number>18</number>
+    </property>
+    <property name="topMargin">
+     <number>18</number>
+    </property>
+    <property name="rightMargin">
+     <number>18</number>
+    </property>
+    <property name="bottomMargin">
+     <number>18</number>
+    </property>
+    <property name="spacing">
+     <number>18</number>
+    </property>
+    <item>
+     <layout class="QVBoxLayout" name="left_layout">
+      <property name="spacing">
+       <number>14</number>
+      </property>
+      <item>
+       <widget class="QGroupBox" name="file_group">
+        <property name="title">
+         <string>📁 File Operations</string>
+        </property>
+        <property name="maximumHeight">
+         <number>100</number>
+        </property>
+        <layout class="QVBoxLayout" name="file_group_layout">
+         <property name="spacing">
+          <number>12</number>
+         </property>
+         <property name="leftMargin">
+          <number>14</number>
+         </property>
+         <property name="topMargin">
+          <number>14</number>
+         </property>
+         <property name="rightMargin">
+          <number>14</number>
+         </property>
+         <property name="bottomMargin">
+          <number>14</number>
+         </property>
+         <item>
+          <widget class="QPushButton" name="btn_load">
+           <property name="minimumSize">
+            <size>
+             <width>0</width>
+             <height>42</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>16777215</width>
+             <height>42</height>
+            </size>
+           </property>
+           <property name="text">
+            <string>📂 Load .raw File</string>
+           </property>
+           <property name="cursor">
+            <cursorShape>PointingHandCursor</cursorShape>
+           </property>
+           <property name="flat">
+            <bool>false</bool>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <widget class="QGroupBox" name="selection_group">
+        <property name="title">
+         <string>🎯 Selection Mode</string>
+        </property>
+        <property name="maximumHeight">
+         <number>140</number>
+        </property>
+        <layout class="QVBoxLayout" name="selection_group_layout">
+         <property name="spacing">
+          <number>12</number>
+         </property>
+         <property name="leftMargin">
+          <number>14</number>
+         </property>
+         <property name="topMargin">
+          <number>14</number>
+         </property>
+         <property name="rightMargin">
+          <number>14</number>
+         </property>
+         <property name="bottomMargin">
+          <number>14</number>
+         </property>
+         <item>
+          <layout class="QHBoxLayout" name="mode_layout">
+           <property name="spacing">
+            <number>16</number>
+           </property>
+           <item>
+            <widget class="QRadioButton" name="radio_drag">
+             <property name="text">
+              <string>✋ Drag Select</string>
+             </property>
+             <property name="checked">
+              <bool>true</bool>
+             </property>
+             <property name="minimumSize">
+              <size>
+               <width>130</width>
+               <height>30</height>
+              </size>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QRadioButton" name="radio_click">
+             <property name="text">
+              <string>👆 Click Select</string>
+             </property>
+             <property name="minimumSize">
+              <size>
+               <width>130</width>
+               <height>30</height>
+              </size>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <spacer name="mode_spacer">
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>40</width>
+               <height>20</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+          </layout>
+         </item>
+         <item>
+          <layout class="QHBoxLayout" name="size_layout">
+           <property name="spacing">
+            <number>12</number>
+           </property>
+           <item>
+            <widget class="QLabel" name="size_label">
+             <property name="styleSheet">
+              <string notr="true">font-weight: bold; font-size: 12px; padding: 4px;</string>
+             </property>
+             <property name="text">
+              <string>Size:</string>
+             </property>
+             <property name="minimumSize">
+              <size>
+               <width>50</width>
+               <height>28</height>
+              </size>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QSpinBox" name="click_size_input">
+             <property name="minimumSize">
+              <size>
+               <width>90</width>
+               <height>32</height>
+              </size>
+             </property>
+             <property name="maximumSize">
+              <size>
+               <width>110</width>
+               <height>32</height>
+              </size>
+             </property>
+             <property name="minimum">
+              <number>10</number>
+             </property>
+             <property name="maximum">
+              <number>200</number>
+             </property>
+             <property name="value">
+              <number>40</number>
+             </property>
+             <property name="suffix">
+              <string> px</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <spacer name="size_spacer">
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>40</width>
+               <height>20</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+          </layout>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <widget class="QGroupBox" name="image_group">
+        <property name="title">
+         <string>🖼️ Image View</string>
+        </property>
+        <layout class="QVBoxLayout" name="image_group_layout">
+         <property name="spacing">
+          <number>10</number>
+         </property>
+         <property name="leftMargin">
+          <number>12</number>
+         </property>
+         <property name="topMargin">
+          <number>12</number>
+         </property>
+         <property name="rightMargin">
+          <number>12</number>
+         </property>
+         <property name="bottomMargin">
+          <number>12</number>
+         </property>
+         <item>
+          <widget class="QScrollArea" name="scroll_area">
+           <property name="minimumSize">
+            <size>
+             <width>430</width>
+             <height>430</height>
+            </size>
+           </property>
+           <property name="widgetResizable">
+            <bool>false</bool>
+           </property>
+           <property name="horizontalScrollBarPolicy">
+            <enum>Qt::ScrollBarAsNeeded</enum>
+           </property>
+           <property name="verticalScrollBarPolicy">
+            <enum>Qt::ScrollBarAsNeeded</enum>
+           </property>
+           <widget class="QWidget" name="scroll_area_contents">
+            <property name="geometry">
+             <rect>
+              <x>0</x>
+              <y>0</y>
+              <width>640</width>
+              <height>640</height>
+             </rect>
+            </property>
+           </widget>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <widget class="QGroupBox" name="roi_group">
+        <property name="title">
+         <string>🔍 ROI Preview</string>
+        </property>
+        <layout class="QVBoxLayout" name="roi_container_layout">
+         <property name="spacing">
+          <number>12</number>
+         </property>
+         <property name="leftMargin">
+          <number>14</number>
+         </property>
+         <property name="topMargin">
+          <number>14</number>
+         </property>
+         <property name="rightMargin">
+          <number>14</number>
+         </property>
+         <property name="bottomMargin">
+          <number>14</number>
+         </property>
+         <item>
+          <widget class="QLabel" name="roi_preview_label">
+           <property name="minimumSize">
+            <size>
+             <width>0</width>
+             <height>130</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>16777215</width>
+             <height>130</height>
+            </size>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">
+border: 3px dashed #3498db;
+background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #ecf0f1, stop:1 #d5dbdb);
+border-radius: 8px;
+font-size: 14px;
+font-weight: bold;
+color: #7f8c8d;
+            </string>
+           </property>
+           <property name="text">
+            <string>Select an area to preview ROI</string>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignCenter</set>
+           </property>
+           <property name="scaledContents">
+            <bool>false</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="roi_size_label">
+           <property name="minimumSize">
+            <size>
+             <width>0</width>
+             <height>38</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>16777215</width>
+             <height>38</height>
+            </size>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">
+background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e8f6f3, stop:1 #d1f2eb);
+border: 2px solid #1abc9c;
+border-radius: 6px;
+padding: 10px;
+font-weight: bold;
+font-size: 13px;
+color: #16a085;
+            </string>
+           </property>
+           <property name="text">
+            <string>📐 Size: --- × ---</string>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignCenter</set>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <spacer name="left_spacer">
+        <property name="orientation">
+         <enum>Qt::Vertical</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>20</width>
+          <height>40</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+     </layout>
+    </item>
+    <item>
+     <layout class="QVBoxLayout" name="right_layout">
+      <property name="spacing">
+       <number>14</number>
+      </property>
+      <item>
+       <widget class="QGroupBox" name="analysis_group">
+        <property name="title">
+         <string>⚙️ Analysis Settings</string>
+        </property>
+        <property name="maximumHeight">
+         <number>160</number>
+        </property>
+        <layout class="QVBoxLayout" name="analysis_layout">
+         <property name="spacing">
+          <number>12</number>
+         </property>
+         <property name="leftMargin">
+          <number>14</number>
+         </property>
+         <property name="topMargin">
+          <number>14</number>
+         </property>
+         <property name="rightMargin">
+          <number>14</number>
+         </property>
+         <property name="bottomMargin">
+          <number>14</number>
+         </property>
+         <item>
+          <layout class="QHBoxLayout" name="method_layout">
+           <property name="spacing">
+            <number>12</number>
+           </property>
+           <item>
+            <widget class="QLabel" name="method_label">
+             <property name="styleSheet">
+              <string notr="true">font-weight: bold; font-size: 12px; padding: 4px;</string>
+             </property>
+             <property name="text">
+              <string>LSF Smoothing:</string>
+             </property>
+             <property name="minimumSize">
+              <size>
+               <width>110</width>
+               <height>28</height>
+              </size>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QComboBox" name="method_combo">
+             <property name="minimumSize">
+              <size>
+               <width>150</width>
+               <height>32</height>
+              </size>
+             </property>
+             <property name="maximumSize">
+              <size>
+               <width>200</width>
+               <height>32</height>
+              </size>
+             </property>
+             <property name="cursor">
+              <cursorShape>PointingHandCursor</cursorShape>
+             </property>
+             <item>
+              <property name="text">
+               <string>Savitzky-Golay</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>Gaussian</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>Median</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>Uniform</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>Butterworth</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>Wiener</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>None</string>
+              </property>
+             </item>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="ny_label">
+             <property name="styleSheet">
+              <string notr="true">font-weight: bold; font-size: 12px; padding: 4px; margin-left: 16px;</string>
+             </property>
+             <property name="text">
+              <string>Nyquist:</string>
+             </property>
+             <property name="minimumSize">
+              <size>
+               <width>70</width>
+               <height>28</height>
+              </size>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLineEdit" name="ny_freq_input">
+             <property name="minimumSize">
+              <size>
+               <width>80</width>
+               <height>32</height>
+              </size>
+             </property>
+             <property name="maximumSize">
+              <size>
+               <width>100</width>
+               <height>32</height>
+              </size>
+             </property>
+             <property name="text">
+              <string>0.5</string>
+             </property>
+             <property name="alignment">
+              <set>Qt::AlignCenter</set>
+             </property>
+             <property name="toolTip">
+              <string>Nyquist frequency (0.0-1.0)</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <spacer name="method_spacer">
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>40</width>
+               <height>20</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+          </layout>
+         </item>
+         <item>
+          <layout class="QHBoxLayout" name="options_layout">
+           <property name="spacing">
+            <number>16</number>
+           </property>
+           <item>
+            <widget class="QCheckBox" name="stabilize_checkbox">
+             <property name="styleSheet">
+              <string notr="true">font-size: 12px; padding: 4px;</string>
+             </property>
+             <property name="text">
+              <string>🔄 SFR Stabilize Filter (Average 3 samples)</string>
+             </property>
+             <property name="minimumSize">
+              <size>
+               <width>0</width>
+               <height>30</height>
+              </size>
+             </property>
+             <property name="cursor">
+              <cursorShape>PointingHandCursor</cursorShape>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <spacer name="options_spacer">
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>40</width>
+               <height>20</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+          </layout>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <widget class="QGroupBox" name="status_group">
+        <property name="title">
+         <string>📊 Status</string>
+        </property>
+        <property name="maximumHeight">
+         <number>90</number>
+        </property>
+        <layout class="QHBoxLayout" name="status_layout">
+         <property name="spacing">
+          <number>12</number>
+         </property>
+         <property name="leftMargin">
+          <number>14</number>
+         </property>
+         <property name="topMargin">
+          <number>14</number>
+         </property>
+         <property name="rightMargin">
+          <number>14</number>
+         </property>
+         <property name="bottomMargin">
+          <number>14</number>
+         </property>
+         <item>
+          <widget class="QLabel" name="info_label">
+           <property name="minimumSize">
+            <size>
+             <width>0</width>
+             <height>48</height>
+            </size>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">
+background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #f8f9fa);
+padding: 14px 18px;
+border: 2px solid #27ae60;
+border-radius: 8px;
+font-size: 13px;
+font-weight: bold;
+color: #27ae60;
+            </string>
+           </property>
+           <property name="text">
+            <string>✅ Ready - Load a .raw file to begin analysis</string>
+           </property>
+           <property name="wordWrap">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <widget class="QGroupBox" name="chart_group">
+        <property name="title">
+         <string>📈 SFR Analysis Results</string>
+        </property>
+        <layout class="QVBoxLayout" name="chart_layout">
+         <property name="spacing">
+          <number>10</number>
+         </property>
+         <property name="leftMargin">
+          <number>12</number>
+         </property>
+         <property name="topMargin">
+          <number>12</number>
+         </property>
+         <property name="rightMargin">
+          <number>12</number>
+         </property>
+         <property name="bottomMargin">
+          <number>12</number>
+         </property>
+         <item>
+          <widget class="QWidget" name="canvas_placeholder" native="true">
+           <property name="minimumSize">
+            <size>
+             <width>900</width>
+             <height>550</height>
+            </size>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">
+background: white;
+border: 2px solid #bdc3c7;
+border-radius: 8px;
+            </string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+     </layout>
+    </item>
+   </layout>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
+
