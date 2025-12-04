@@ -6,47 +6,28 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1600</width>
-    <height>900</height>
    </rect>
   </property>
   <property name="windowTitle">
-   <string>pyTools_ResoLab</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <layout class="QHBoxLayout" name="horizontalLayout">
     <item>
      <layout class="QVBoxLayout" name="left_layout">
       <item>
-       <widget class="QPushButton" name="btn_load">
+        </property>
+      <item>
         <property name="text">
-         <string>Load .raw File</string>
         </property>
        </widget>
       </item>
+      </item>
       <item>
-       <widget class="QLabel" name="recent_label">
-        <property name="text">
-         <string>Recent Files:</string>
         </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QComboBox" name="recent_files_combo"/>
-      </item>
-      <item>
-       <widget class="QLabel" name="mode_label">
-        <property name="text">
-         <string>Selection Mode:</string>
-        </property>
-       </widget>
-      </item>
       <item>
        <layout class="QHBoxLayout" name="mode_layout">
         <item>
          <widget class="QRadioButton" name="radio_drag">
           <property name="text">
-           <string>Drag Select</string>
           </property>
           <property name="checked">
            <bool>true</bool>
@@ -56,7 +37,6 @@
         <item>
          <widget class="QRadioButton" name="radio_click">
           <property name="text">
-           <string>Click (40x40)</string>
           </property>
          </widget>
         </item>
@@ -79,68 +59,35 @@
            <number>40</number>
           </property>
          </widget>
-        </item>
-       </layout>
       </item>
       <item>
-       <layout class="QHBoxLayout" name="view_mode_layout">
-        <item>
-         <widget class="QPushButton" name="btn_sfr_mode">
-          <property name="text">
-           <string>📊 SFR</string>
           </property>
-          <property name="checkable">
-           <bool>true</bool>
-          </property>
-          <property name="checked">
-           <bool>true</bool>
           </property>
          </widget>
         </item>
         <item>
-         <widget class="QPushButton" name="btn_view_mode">
-          <property name="text">
-           <string>🖐 VIEW</string>
           </property>
-          <property name="checkable">
-           <bool>true</bool>
           </property>
-         </widget>
-        </item>
-       </layout>
-      </item>
       <item>
        <widget class="QScrollArea" name="scroll_area">
         <property name="widgetResizable">
-         <bool>true</bool>
         </property>
-        <widget class="QWidget" name="scrollAreaWidgetContents">
          <property name="geometry">
           <rect>
            <x>0</x>
            <y>0</y>
-           <width>786</width>
-           <height>499</height>
           </rect>
          </property>
-         <layout class="QVBoxLayout" name="verticalLayout_2">
-          <item>
-           <widget class="QLabel" name="image_label">
-            <property name="text">
-             <string/>
-            </property>
            </widget>
           </item>
          </layout>
         </widget>
-       </widget>
       </item>
       <item>
        <layout class="QVBoxLayout" name="roi_container_layout">
         <item>
          <widget class="QLabel" name="roi_preview_label">
           <property name="text">
-           <string>ROI Preview</string>
           </property>
           <property name="alignment">
            <set>Qt::AlignCenter</set>
@@ -150,7 +97,6 @@
         <item>
          <widget class="QLabel" name="roi_size_label">
           <property name="text">
-           <string>Size: ---</string>
           </property>
           <property name="alignment">
            <set>Qt::AlignCenter</set>
@@ -168,7 +114,6 @@
         <item>
          <widget class="QLabel" name="method_label">
           <property name="text">
-           <string>LSF Smoothing Method:</string>
           </property>
          </widget>
         </item>
@@ -176,152 +121,81 @@
          <widget class="QComboBox" name="method_combo">
           <item>
            <property name="text">
-            <string>savgol</string>
            </property>
           </item>
           <item>
            <property name="text">
-            <string>gaussian</string>
            </property>
           </item>
           <item>
            <property name="text">
-            <string>median</string>
            </property>
           </item>
           <item>
            <property name="text">
-            <string>uniform</string>
            </property>
           </item>
           <item>
            <property name="text">
-            <string>butterworth</string>
            </property>
           </item>
           <item>
            <property name="text">
-            <string>wiener</string>
            </property>
           </item>
           <item>
            <property name="text">
-            <string>none</string>
            </property>
           </item>
          </widget>
         </item>
-       </layout>
-      </item>
       <item>
-       <layout class="QHBoxLayout" name="stabilize_layout">
-        <item>
-         <widget class="QCheckBox" name="stabilize_checkbox">
-          <property name="text">
-           <string>SFR Stabilize Filter (Average 3 samples)</string>
           </property>
-         </widget>
-        </item>
-       </layout>
-      </item>
-      <item>
-       <layout class="QHBoxLayout" name="edge_threshold_layout">
-        <item>
-         <widget class="QCheckBox" name="edge_detect_checkbox">
           <property name="text">
-           <string>Edge Detect</string>
           </property>
          </widget>
         </item>
         <item>
-         <widget class="QLabel" name="edge_label">
           <property name="text">
-           <string>Threshold:</string>
           </property>
          </widget>
         </item>
         <item>
-         <widget class="QSlider" name="edge_threshold_slider">
-          <property name="minimum">
-           <number>10</number>
-          </property>
-          <property name="maximum">
-           <number>200</number>
-          </property>
-          <property name="value">
-           <number>50</number>
-          </property>
           <property name="orientation">
            <enum>Qt::Horizontal</enum>
           </property>
-         </widget>
         </item>
         <item>
-         <widget class="QLabel" name="edge_threshold_value_label">
+          </property>
+        <item>
           <property name="text">
-           <string>50</string>
           </property>
          </widget>
         </item>
         <item>
-         <widget class="QPushButton" name="btn_apply_edge">
-          <property name="text">
-           <string>Apply Edge</string>
           </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QPushButton" name="btn_erase_edge">
-          <property name="text">
-           <string>Erase Edge</string>
-          </property>
-         </widget>
         </item>
        </layout>
       </item>
       <item>
-       <layout class="QHBoxLayout" name="info_ny_layout">
         <item>
          <widget class="QLabel" name="info_label">
           <property name="text">
-           <string>Status: Ready</string>
           </property>
          </widget>
         </item>
         <item>
-         <widget class="QLabel" name="ny_label">
-          <property name="text">
-           <string>Ny:</string>
           </property>
-         </widget>
-        </item>
         <item>
-         <widget class="QLineEdit" name="ny_freq_input">
-          <property name="text">
-           <string>0.5</string>
           </property>
          </widget>
         </item>
        </layout>
-      </item>
-      <item>
-       <widget class="QWidget" name="canvas_placeholder" native="true"/>
       </item>
      </layout>
     </item>
    </layout>
   </widget>
-  <widget class="QMenuBar" name="menubar">
-   <property name="geometry">
-    <rect>
-     <x>0</x>
-     <y>0</y>
-     <width>1600</width>
-     <height>22</height>
-    </rect>
-   </property>
-  </widget>
-  <widget class="QStatusBar" name="statusbar"/>
  </widget>
  <resources/>
  <connections/>
