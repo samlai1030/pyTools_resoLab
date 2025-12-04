@@ -1,5 +1,7 @@
 import os
 import sys
+import os
+import json
 
 import cv2
 import numpy as np
@@ -7,8 +9,17 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from PyQt5.QtCore import QRect, Qt
 from PyQt5.QtGui import QColor, QImage, QPainter, QPen, QPixmap
-from PyQt5.QtWidgets import (QApplication, QFileDialog, QInputDialog, QLabel, QMainWindow,
+from PyQt5.QtWidgets import (
+    QApplication,
+    QFileDialog,
+    QInputDialog,
+    QLabel,
+    QMainWindow,
     QMessageBox,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QScrollArea,
 )
 from scipy import fftpack
 from scipy.ndimage import gaussian_filter, gaussian_filter1d, uniform_filter1d
@@ -839,44 +850,129 @@ class MainWindow(QMainWindow):
 
         # Data
         self.raw_data = None
-        self.image_w = 640  # 預設，實際應由使用者輸入
+        self.display_data = None  # Store display data for edge overlay
+        self.image_w = 640
         self.image_h = 640
 
         # LSF Smoothing method selection
-        self.lsf_smoothing_method = "savgol"  # Default method
-
-        # Method name mapping from UI display names to internal names
-        self.method_name_map = {
-            "Savitzky-Golay": "savgol",
-            "Gaussian": "gaussian",
-            "Median": "median",
-            "Uniform": "uniform",
-            "Butterworth": "butterworth",
-            "Wiener": "wiener",
-            "None": "none",
-            # Also support direct lowercase names for backwards compatibility
-            "savgol": "savgol",
-            "gaussian": "gaussian",
-            "median": "median",
-            "uniform": "uniform",
-            "butterworth": "butterworth",
-            "wiener": "wiener",
-            "none": "none",
-        }
+        self.lsf_smoothing_method = "none"  # Default method
 
         # Selection mode: "drag" or "click"
-        self.selection_mode = "drag"  # Default: drag to select
+        self.selection_mode = "drag"
 
-        # Click select size (default 30x30)
-        self.click_select_size = 30
+        # Click select size (default 40x40)
+        self.click_select_size = 40
 
         # SFR stabilize filter enable/disable
-        self.sfr_stabilize_enabled = False  # Default: disabled
+        self.sfr_stabilize_enabled = False
 
-        self.init_ui()
+        # View mode: "sfr" for SFR analysis or "view" for panning
+        self.view_mode = "sfr"
+
+        # Edge detection threshold
+        self.edge_threshold = 50
+
+        # Edge detection display mode
+        self.edge_detect_enabled = False
+        self.edge_overlay_applied = False
+        self.locked_edge_mask = None
+
+        # Recent files list
+        self.recent_files = []
+        self.max_recent_files = 10
+        self.RECENT_FILES_PATH = "recent_files.json"
+
+        # Initialize
+        self.load_recent_files()
+        self.setup_ui()
+
+    def setup_ui(self):
+        """Setup UI - basic initialization"""
+        # Setup image label if scroll area exists
+        try:
+            self.image_label = ImageLabel(self)
+            self.ui.scroll_area.setWidget(self.image_label)
+            self.image_label.scroll_area = self.ui.scroll_area
+        except AttributeError:
+            self.image_label = None
+
+        # Setup plots with canvas placeholder
+        try:
+            self.figure = Figure(figsize=(12, 9), dpi=100)
+            self.figure.patch.set_facecolor("white")
+            self.canvas = FigureCanvas(self.figure)
+
+            # Create a layout for the placeholder and add the canvas
+            if hasattr(self.ui, 'canvas_placeholder'):
+                canvas_layout = QVBoxLayout(self.ui.canvas_placeholder)
+                canvas_layout.setContentsMargins(0, 0, 0, 0)
+                canvas_layout.addWidget(self.canvas)
+
+            self.ax_sfr = self.figure.add_subplot(211)
+            self.ax_esf = self.figure.add_subplot(223)
+            self.ax_lsf = self.figure.add_subplot(224)
+
+            self.ax_sfr.set_title("SFR / MTF Result", fontsize=11, fontweight="bold")
+            self.ax_sfr.set_xlabel("Frequency (cycles/pixel)", fontsize=10)
+            self.ax_sfr.set_ylabel("MTF", fontsize=10)
+            self.ax_sfr.grid(True, alpha=0.3)
+
+            self.ax_esf.set_title(
+                "ESF (Edge Spread Function)", fontsize=10, fontweight="bold"
+            )
+            self.ax_esf.set_xlabel("Position (pixels)", fontsize=9)
+            self.ax_esf.set_ylabel("Intensity", fontsize=9)
+            self.ax_esf.grid(True, alpha=0.3)
+
+            self.ax_lsf.set_title(
+                "LSF (Line Spread Function)", fontsize=10, fontweight="bold"
+            )
+            self.ax_lsf.set_xlabel("Position (pixels)", fontsize=9)
+            self.ax_lsf.set_ylabel("Derivative", fontsize=9)
+            self.ax_lsf.grid(True, alpha=0.3)
+
+            self.figure.tight_layout()
+        except Exception as e:
+            print(f"Error setting up plots: {e}")
+            self.canvas = None
+
+        # Update recent files if combo exists
+        try:
+            self.update_recent_files_list()
+        except Exception:
+            pass
+
+    def closeEvent(self, event):
+        self.save_recent_files()
+        super().closeEvent(event)
+
+    def save_recent_files(self):
+        try:
+            with open(self.RECENT_FILES_PATH, "w") as f:
+                json.dump(self.recent_files, f)
+        except Exception as e:
+            print(f"Failed to save recent files: {e}")
+
+    def load_recent_files(self):
+        try:
+            with open(self.RECENT_FILES_PATH, "r") as f:
+                self.recent_files = json.load(f)
+        except Exception:
+            self.recent_files = []
+
+    def update_recent_files_list(self):
+        """Update the recent files combo box if it exists"""
+        try:
+            if hasattr(self.ui, 'recent_files_combo'):
+                self.ui.recent_files_combo.clear()
+                self.ui.recent_files_combo.addItem("-- Select Recent File --")
+                for f in self.recent_files:
+                    filename = os.path.basename(f)
+                    self.ui.recent_files_combo.addItem(filename, f)
+        except Exception:
+            pass
 
     # ...existing code...
-
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = MainWindow()
