@@ -13,13 +13,9 @@ from PyQt5.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFileDialog,
-    QGroupBox,
     QHBoxLayout,
-    QInputDialog,
     QLabel,
     QLineEdit,
-    QListWidget,
-    QListWidgetItem,
     QMainWindow,
     QMessageBox,
     QPushButton,
@@ -911,7 +907,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("pyTools_SFR_Analyzer")
+        self.setWindowTitle("pyTools_ResoLab")
         self.resize(1600, 900)
 
         # Data
@@ -921,7 +917,7 @@ class MainWindow(QMainWindow):
         self.image_h = 640
 
         # LSF Smoothing method selection
-        self.lsf_smoothing_method = "savgol"  # Default method
+        self.lsf_smoothing_method = "none"  # Default method
 
         # Selection mode: "drag" or "click"
         self.selection_mode = "drag"  # Default: drag to select
@@ -985,30 +981,28 @@ class MainWindow(QMainWindow):
         self.btn_load.setStyleSheet("padding: 5px; font-size: 12px;")
         self.btn_load.clicked.connect(self.load_raw_file)
 
-        # Recent Files List Widget
+        # Recent Files ComboBox
         recent_label = QLabel("Recent Files:")
         recent_label.setStyleSheet("font-weight: bold; font-size: 10px; margin-top: 5px;")
 
-        self.recent_files_list = QListWidget()
-        self.recent_files_list.setMaximumHeight(80)
-        self.recent_files_list.setStyleSheet("""
-            QListWidget {
+        self.recent_files_combo = QComboBox()
+        self.recent_files_combo.setMinimumHeight(28)
+        self.recent_files_combo.setStyleSheet("""
+            QComboBox {
                 font-size: 10px;
                 border: 1px solid #ccc;
                 background: white;
+                padding: 4px;
             }
-            QListWidget::item {
-                padding: 2px;
+            QComboBox:hover {
+                border: 1px solid #4CAF50;
             }
-            QListWidget::item:hover {
-                background: #e0e0e0;
-            }
-            QListWidget::item:selected {
-                background: #4CAF50;
-                color: white;
+            QComboBox::drop-down {
+                border: none;
+                width: 20px;
             }
         """)
-        self.recent_files_list.itemDoubleClicked.connect(self.on_recent_file_double_clicked)
+        self.recent_files_combo.activated.connect(self.on_recent_file_selected)
 
         # Selection Mode Selection (NEW)
         mode_label = QLabel("Selection Mode:")
@@ -1048,7 +1042,7 @@ class MainWindow(QMainWindow):
 
         left_layout.addWidget(self.btn_load)
         left_layout.addWidget(recent_label)
-        left_layout.addWidget(self.recent_files_list)
+        left_layout.addWidget(self.recent_files_combo)
         left_layout.addWidget(mode_label)
         left_layout.addLayout(mode_layout)
 
@@ -1170,7 +1164,7 @@ class MainWindow(QMainWindow):
         self.method_combo.addItems(
             ["savgol", "gaussian", "median", "uniform", "butterworth", "wiener", "none"]
         )
-        self.method_combo.setCurrentText("savgol")  # Default
+        self.method_combo.setCurrentText("none")  # Default
         self.method_combo.setMinimumWidth(120)
         self.method_combo.setStyleSheet("font-size: 10px; padding: 3px;")
         self.method_combo.currentTextChanged.connect(self.on_smoothing_method_changed)
@@ -1328,7 +1322,6 @@ class MainWindow(QMainWindow):
         self.figure = Figure(figsize=(12, 9), dpi=100)
         self.figure.patch.set_facecolor("white")
         self.canvas = FigureCanvas(self.figure)
-        self.canvas.setMinimumSize(900, 600)
         self.canvas.setStyleSheet("background: white; border: 1px solid #ccc;")
 
         # Create subplots: 2 rows, 2 columns layout
@@ -1370,6 +1363,9 @@ class MainWindow(QMainWindow):
         layout.addLayout(left_layout, 1)
         layout.addLayout(right_layout, 1)
 
+        # Populate recent files list from saved data
+        self.update_recent_files_list()
+
     def add_to_recent_files(self, file_path):
         if file_path in self.recent_files:
             self.recent_files.remove(file_path)
@@ -1377,27 +1373,36 @@ class MainWindow(QMainWindow):
         if len(self.recent_files) > self.max_recent_files:
             self.recent_files = self.recent_files[:self.max_recent_files]
         self.update_recent_files_list()
+        self.save_recent_files()  # Save immediately for persistence
 
     def update_recent_files_list(self):
-        self.recent_files_list.clear()
+        self.recent_files_combo.clear()
+        self.recent_files_combo.addItem("-- Select Recent File --")
         for f in self.recent_files:
-            self.recent_files_list.addItem(f)
+            # Show only filename in combo, store full path as data
+            filename = os.path.basename(f)
+            self.recent_files_combo.addItem(filename, f)
 
-    def on_recent_file_double_clicked(self, item):
-        file_path = item.text()
-        if os.path.exists(file_path):
+    def on_recent_file_selected(self, index):
+        if index <= 0:  # Skip the placeholder item
+            return
+        file_path = self.recent_files_combo.itemData(index)
+        if file_path and os.path.exists(file_path):
             self.load_raw_file_from_path(file_path)
-        else:
+            # Reset combo to placeholder after loading
+            self.recent_files_combo.setCurrentIndex(0)
+        elif file_path:
             QMessageBox.warning(self, "File Not Found", f"File not found: {file_path}")
             self.recent_files.remove(file_path)
             self.update_recent_files_list()
+            self.save_recent_files()  # Save after removing invalid file
 
     def load_raw_file_from_path(self, fname):
         # This is a refactor of load_raw_file to allow loading from a given path (no dialog)
         if not fname:
             return
         file_size = os.path.getsize(fname)
-        detected_w, detected_h, detected_dtype = self.auto_detect_raw_dimensions(file_size)
+        detected_w, detected_h, detected_dtype = self.auto_detect_raw_dimensions(file_size, fname)
         if detected_w > 0 and detected_h > 0:
             self.image_w = detected_w
             self.image_h = detected_h
@@ -1436,44 +1441,17 @@ class MainWindow(QMainWindow):
         if not fname:
             return
 
-        # Auto-detect image dimensions based on file size
+        # Auto-detect image dimensions based on file size and filename
         file_size = os.path.getsize(fname)
-        detected_w, detected_h, detected_dtype = self.auto_detect_raw_dimensions(file_size)
+        detected_w, detected_h, detected_dtype = self.auto_detect_raw_dimensions(file_size, fname)
 
-        # Use detected values as defaults
+        # Auto-apply detected values
         if detected_w > 0 and detected_h > 0:
             self.image_w = detected_w
             self.image_h = detected_h
 
-        # Get image dimensions (with auto-detected defaults)
-        w, ok = QInputDialog.getInt(self, "Raw Config", f"Width (auto-detected: {detected_w}):", self.image_w)
-        if not ok:
-            return
-        self.image_w = w
-
-        h, ok2 = QInputDialog.getInt(self, "Raw Config", f"Height (auto-detected: {detected_h}):", self.image_h)
-        if not ok2:
-            return
-        self.image_h = h
-
-        # Get data type
         dtype_options = {"uint8": np.uint8, "uint16": np.uint16, "float32": np.float32}
-        dtype_names = list(dtype_options.keys())
-        # Set default index based on detected dtype
-        default_idx = 1  # Default to uint16
-        if detected_dtype == "uint8":
-            default_idx = 0
-        elif detected_dtype == "uint16":
-            default_idx = 1
-        elif detected_dtype == "float32":
-            default_idx = 2
-
-        dtype_choice, ok3 = QInputDialog.getItem(
-            self, "Raw Config", "Data Type:", dtype_names, default_idx
-        )
-        if not ok3:
-            return
-
+        dtype_choice = detected_dtype if detected_dtype in dtype_options else "uint16"
         selected_dtype = dtype_options[dtype_choice]
 
         try:
@@ -1504,52 +1482,115 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error reading raw file: {str(e)}")
 
-    def auto_detect_raw_dimensions(self, file_size):
+    def auto_detect_raw_dimensions(self, file_size, filename=None):
         """
-        Auto-detect raw image dimensions based on file size.
+        Auto-detect raw image dimensions based on file size and optionally filename.
         Returns (width, height, dtype_name) tuple.
-        Common raw image sizes are checked.
+
+        Detection strategies:
+        1. Parse dimensions from filename (e.g., image_1920x1080.raw, image_1920_1080_16bit.raw)
+        2. Match against common raw image sizes
+        3. Try common aspect ratios
+        4. Try square dimensions
         """
-        # Common raw image dimensions to check
+        import re
+
+        # Strategy 1: Try to parse dimensions from filename
+        if filename:
+            basename = os.path.basename(filename)
+
+            # Pattern: WxH (e.g., 1920x1080, 4000x3000)
+            match = re.search(r'(\d{3,5})[xX](\d{3,5})', basename)
+            if match:
+                w, h = int(match.group(1)), int(match.group(2))
+                # Determine data type based on file size
+                for bpp, dtype_name in [(1, "uint8"), (2, "uint16"), (4, "float32")]:
+                    if w * h * bpp == file_size:
+                        return (w, h, dtype_name)
+
+            # Pattern: W_H (e.g., 1920_1080, 4000_3000)
+            match = re.search(r'(\d{3,5})_(\d{3,5})', basename)
+            if match:
+                w, h = int(match.group(1)), int(match.group(2))
+                for bpp, dtype_name in [(1, "uint8"), (2, "uint16"), (4, "float32")]:
+                    if w * h * bpp == file_size:
+                        return (w, h, dtype_name)
+
+            # Pattern: W-H (e.g., 1920-1080)
+            match = re.search(r'(\d{3,5})-(\d{3,5})', basename)
+            if match:
+                w, h = int(match.group(1)), int(match.group(2))
+                for bpp, dtype_name in [(1, "uint8"), (2, "uint16"), (4, "float32")]:
+                    if w * h * bpp == file_size:
+                        return (w, h, dtype_name)
+
+            # Check for bit depth hints in filename
+            bit_hint = None
+            if '8bit' in basename.lower() or '_8b' in basename.lower():
+                bit_hint = 1
+            elif '16bit' in basename.lower() or '_16b' in basename.lower():
+                bit_hint = 2
+            elif '32bit' in basename.lower() or 'float' in basename.lower():
+                bit_hint = 4
+
+        # Strategy 2: Common raw image dimensions to check
         common_sizes = [
             # (width, height, bytes_per_pixel, dtype_name)
-            # 8-bit common sizes
-            (640, 480, 1, "uint8"),      # VGA
-            (800, 600, 1, "uint8"),      # SVGA
-            (1024, 768, 1, "uint8"),     # XGA
-            (1280, 720, 1, "uint8"),     # HD 720p
-            (1280, 960, 1, "uint8"),
-            (1920, 1080, 1, "uint8"),    # Full HD
-            (2048, 1536, 1, "uint8"),    # 3MP
-            (2592, 1944, 1, "uint8"),    # 5MP
-            (3264, 2448, 1, "uint8"),    # 8MP
-            (4032, 3024, 1, "uint8"),    # 12MP
-            (4096, 2160, 1, "uint8"),    # 4K
-            # 16-bit common sizes
+            # Sensor common sizes - 16-bit first (more common for raw)
+            (4000, 3000, 2, "uint16"),    # 12MP sensor
+            (4032, 3024, 2, "uint16"),    # 12MP iPhone
+            (4608, 3456, 2, "uint16"),    # 16MP
+            (4624, 3472, 2, "uint16"),    # Sony IMX
+            (4656, 3496, 2, "uint16"),    # Sony IMX
+            (5184, 3888, 2, "uint16"),    # 20MP
+            (5472, 3648, 2, "uint16"),    # 20MP
+            (6000, 4000, 2, "uint16"),    # 24MP
+            (6016, 4016, 2, "uint16"),    # Sony A7
+            (6048, 4024, 2, "uint16"),    # Sony
+            (8256, 5504, 2, "uint16"),    # 45MP
+            (8192, 5464, 2, "uint16"),    # Canon R5
+            (7952, 5304, 2, "uint16"),    # Canon 5D
+            (9504, 6336, 2, "uint16"),    # 60MP
+            # Video/display resolutions - 16-bit
             (640, 480, 2, "uint16"),
+            (640, 640, 2, "uint16"),
             (800, 600, 2, "uint16"),
             (1024, 768, 2, "uint16"),
-            (1280, 720, 2, "uint16"),
+            (1280, 720, 2, "uint16"),     # HD 720p
             (1280, 960, 2, "uint16"),
-            (1920, 1080, 2, "uint16"),
-            (2048, 1536, 2, "uint16"),
-            (2592, 1944, 2, "uint16"),
-            (3264, 2448, 2, "uint16"),
-            (4032, 3024, 2, "uint16"),
-            (4096, 2160, 2, "uint16"),
-            # Square sizes (common for test patterns)
-            (256, 256, 1, "uint8"),
+            (1920, 1080, 2, "uint16"),    # Full HD
+            (2048, 1536, 2, "uint16"),    # 3MP
+            (2560, 1440, 2, "uint16"),    # QHD
+            (2592, 1944, 2, "uint16"),    # 5MP
+            (3264, 2448, 2, "uint16"),    # 8MP
+            (3840, 2160, 2, "uint16"),    # 4K UHD
+            (4096, 2160, 2, "uint16"),    # 4K DCI
+            # Square sizes - 16-bit (common for test patterns)
             (256, 256, 2, "uint16"),
-            (512, 512, 1, "uint8"),
             (512, 512, 2, "uint16"),
-            (640, 640, 1, "uint8"),
             (640, 640, 2, "uint16"),
-            (1024, 1024, 1, "uint8"),
             (1024, 1024, 2, "uint16"),
-            (2048, 2048, 1, "uint8"),
             (2048, 2048, 2, "uint16"),
-            (4096, 4096, 1, "uint8"),
             (4096, 4096, 2, "uint16"),
+            # 8-bit versions
+            (640, 480, 1, "uint8"),
+            (800, 600, 1, "uint8"),
+            (1024, 768, 1, "uint8"),
+            (1280, 720, 1, "uint8"),
+            (1280, 960, 1, "uint8"),
+            (1920, 1080, 1, "uint8"),
+            (2048, 1536, 1, "uint8"),
+            (2592, 1944, 1, "uint8"),
+            (3264, 2448, 1, "uint8"),
+            (4032, 3024, 1, "uint8"),
+            (4096, 2160, 1, "uint8"),
+            (256, 256, 1, "uint8"),
+            (512, 512, 1, "uint8"),
+            (640, 640, 1, "uint8"),
+            (640, 641, 1, "uint8"),
+            (1024, 1024, 1, "uint8"),
+            (2048, 2048, 1, "uint8"),
+            (4096, 4096, 1, "uint8"),
         ]
 
         # Check each common size
@@ -1558,33 +1599,57 @@ class MainWindow(QMainWindow):
             if file_size == expected_size:
                 return (w, h, dtype_name)
 
-        # Try to find square image dimensions
-        for bpp, dtype_name in [(1, "uint8"), (2, "uint16"), (4, "float32")]:
+        # Strategy 3: Try to find square image dimensions
+        for bpp, dtype_name in [(2, "uint16"), (1, "uint8"), (4, "float32")]:
             pixels = file_size // bpp
             side = int(np.sqrt(pixels))
             if side * side * bpp == file_size:
                 return (side, side, dtype_name)
 
-        # Try common aspect ratios (4:3, 16:9, 3:2)
-        for bpp, dtype_name in [(2, "uint16"), (1, "uint8")]:
+        # Strategy 4: Try common aspect ratios (4:3, 16:9, 3:2, 1.5:1)
+        for bpp, dtype_name in [(2, "uint16"), (1, "uint8"), (4, "float32")]:
             pixels = file_size // bpp
+            if pixels == 0:
+                continue
+
             # 4:3 aspect ratio
             h = int(np.sqrt(pixels * 3 / 4))
             w = int(h * 4 / 3)
             if w * h * bpp == file_size:
                 return (w, h, dtype_name)
+
             # 16:9 aspect ratio
             h = int(np.sqrt(pixels * 9 / 16))
             w = int(h * 16 / 9)
             if w * h * bpp == file_size:
                 return (w, h, dtype_name)
+
             # 3:2 aspect ratio
             h = int(np.sqrt(pixels * 2 / 3))
             w = int(h * 3 / 2)
             if w * h * bpp == file_size:
                 return (w, h, dtype_name)
 
-        # Could not detect, return defaults
+            # Try factorization for other dimensions
+            # Find factors close to common aspect ratios
+            for aspect_w, aspect_h in [(4, 3), (16, 9), (3, 2), (16, 10), (5, 4)]:
+                h_try = int(np.sqrt(pixels * aspect_h / aspect_w))
+                for h_offset in range(-2, 3):  # Try nearby values
+                    h_test = h_try + h_offset
+                    if h_test <= 0:
+                        continue
+                    if pixels % h_test == 0:
+                        w_test = pixels // h_test
+                        if w_test * h_test * bpp == file_size:
+                            return (w_test, h_test, dtype_name)
+
+        # Could not detect, return defaults based on file size estimation
+        # Assume uint16 and try to guess reasonable dimensions
+        pixels_16bit = file_size // 2
+        if pixels_16bit > 0:
+            side = int(np.sqrt(pixels_16bit))
+            return (side, side, "uint16")
+
         return (640, 640, "uint16")
 
     def display_image(self, numpy_img):
