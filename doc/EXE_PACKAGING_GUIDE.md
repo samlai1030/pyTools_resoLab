@@ -40,7 +40,7 @@ pyinstaller --onefile \
     --name pyTools_ResoLab \
     --add-data "makedown:makedown" \
     --hidden-import=PyQt5.sip \
-    SFR_app_v2.py
+    main.py
 ```
 
 #### Option C: Using the Spec File
@@ -101,7 +101,7 @@ pyinstaller --onefile \
     --windowed \
     --icon=icon.ico \
     --name pyTools_ResoLab \
-    SFR_app_v2.py
+    main.py
 ```
 
 ### Include Additional Files
@@ -122,7 +122,7 @@ Remove `--windowed` flag:
 pyinstaller --onefile \
     --name pyTools_ResoLab \
     --hidden-import=PyQt5.sip \
-    SFR_app_v2.py
+    main.py
 ```
 
 ## File Sizes
@@ -177,7 +177,7 @@ pyinstaller --onefile \
     --name pyTools_ResoLab_v2.0 \
     --add-data "makedown:makedown" \
     --hidden-import=PyQt5.sip \
-    SFR_app_v2.py
+    main.py
 ```
 
 3. Zip the dist folder:
@@ -221,7 +221,7 @@ jobs:
         with:
           python-version: '3.11'
       - run: pip install -r requirements.txt pyinstaller
-      - run: pyinstaller --onefile --windowed --name pyTools_ResoLab SFR_app_v2.py
+      - run: pyinstaller --onefile --windowed --name pyTools_ResoLab main.py
       - uses: actions/upload-artifact@v2
         with:
           name: pyTools_ResoLab.exe

@@ -14,296 +14,90 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
-        MainWindow.resize(1800, 1000)
-        MainWindow.setMinimumSize(QtCore.QSize(1400, 800))
-        MainWindow.setStyleSheet("\n"
-"QMainWindow {\n"
-"    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #f5f7fa, stop:1 #e4e8ed);\n"
-"}\n"
-"QGroupBox {\n"
-"    font-weight: bold;\n"
-"    font-size: 13px;\n"
-"    color: #2c3e50;\n"
-"    border: 2px solid #bdc3c7;\n"
-"    border-radius: 10px;\n"
-"    margin-top: 14px;\n"
-"    padding-top: 12px;\n"
-"    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #f8f9fa);\n"
-"}\n"
-"QGroupBox::title {\n"
-"    subcontrol-origin: margin;\n"
-"    subcontrol-position: top left;\n"
-"    left: 14px;\n"
-"    padding: 2px 10px;\n"
-"    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3498db, stop:1 #2980b9);\n"
-"    color: white;\n"
-"    border-radius: 5px;\n"
-"    font-weight: bold;\n"
-"    font-size: 13px;\n"
-"}\n"
-"QPushButton {\n"
-"    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3498db, stop:1 #2980b9);\n"
-"    color: white;\n"
-"    border: none;\n"
-"    border-radius: 8px;\n"
-"    padding: 12px 24px;\n"
-"    font-size: 13px;\n"
-"    font-weight: bold;\n"
-"    min-height: 40px;\n"
-"}\n"
-"QPushButton:hover {\n"
-"    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5dade2, stop:1 #3498db);\n"
-"    border: 2px solid #2980b9;\n"
-"}\n"
-"QPushButton:pressed {\n"
-"    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2471a3, stop:1 #1a5276);\n"
-"}\n"
-"QPushButton:focus {\n"
-"    outline: none;\n"
-"    border: 2px solid #2980b9;\n"
-"}\n"
-"QRadioButton {\n"
-"    font-size: 13px;\n"
-"    color: #2c3e50;\n"
-"    spacing: 10px;\n"
-"    padding: 6px 4px;\n"
-"    min-height: 28px;\n"
-"}\n"
-"QRadioButton::indicator {\n"
-"    width: 20px;\n"
-"    height: 20px;\n"
-"}\n"
-"QRadioButton::indicator:checked {\n"
-"    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3498db, stop:1 #2980b9);\n"
-"    border: 2px solid #2980b9;\n"
-"    border-radius: 10px;\n"
-"}\n"
-"QRadioButton::indicator:unchecked {\n"
-"    background: white;\n"
-"    border: 2px solid #bdc3c7;\n"
-"    border-radius: 10px;\n"
-"}\n"
-"QComboBox {\n"
-"    background: white;\n"
-"    border: 2px solid #bdc3c7;\n"
-"    border-radius: 6px;\n"
-"    padding: 8px 14px;\n"
-"    font-size: 12px;\n"
-"    min-width: 140px;\n"
-"    min-height: 32px;\n"
-"}\n"
-"QComboBox:hover {\n"
-"    border-color: #3498db;\n"
-"    border-width: 2px;\n"
-"}\n"
-"QComboBox:focus {\n"
-"    border-color: #3498db;\n"
-"    background: #f9fafb;\n"
-"}\n"
-"QComboBox::drop-down {\n"
-"    border: none;\n"
-"    width: 35px;\n"
-"}\n"
-"QComboBox::down-arrow {\n"
-"    width: 14px;\n"
-"    height: 14px;\n"
-"}\n"
-"QSpinBox, QLineEdit {\n"
-"    background: white;\n"
-"    border: 2px solid #bdc3c7;\n"
-"    border-radius: 6px;\n"
-"    padding: 8px 12px;\n"
-"    font-size: 12px;\n"
-"    min-height: 32px;\n"
-"}\n"
-"QSpinBox:hover, QLineEdit:hover {\n"
-"    border-color: #3498db;\n"
-"}\n"
-"QSpinBox:focus, QLineEdit:focus {\n"
-"    border-color: #3498db;\n"
-"    background: #f9fafb;\n"
-"}\n"
-"QCheckBox {\n"
-"    font-size: 13px;\n"
-"    color: #2c3e50;\n"
-"    spacing: 10px;\n"
-"    padding: 6px 4px;\n"
-"    min-height: 30px;\n"
-"}\n"
-"QCheckBox::indicator {\n"
-"    width: 22px;\n"
-"    height: 22px;\n"
-"    border-radius: 5px;\n"
-"}\n"
-"QCheckBox::indicator:unchecked {\n"
-"    background: white;\n"
-"    border: 2px solid #bdc3c7;\n"
-"}\n"
-"QCheckBox::indicator:checked {\n"
-"    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #27ae60, stop:1 #1e8449);\n"
-"    border: 2px solid #1e8449;\n"
-"}\n"
-"QLabel {\n"
-"    color: #2c3e50;\n"
-"    font-size: 12px;\n"
-"}\n"
-"QLabel#title_label {\n"
-"    font-size: 14px;\n"
-"    font-weight: bold;\n"
-"    color: #2c3e50;\n"
-"}\n"
-"QScrollArea {\n"
-"    border: 2px solid #bdc3c7;\n"
-"    border-radius: 8px;\n"
-"    background: #ecf0f1;\n"
-"}\n"
-"   ")
+        MainWindow.resize(1600, 900)
         self.centralwidget = QtWidgets.QWidget(MainWindow)
         self.centralwidget.setObjectName("centralwidget")
-        self.main_layout = QtWidgets.QHBoxLayout(self.centralwidget)
-        self.main_layout.setContentsMargins(18, 18, 18, 18)
-        self.main_layout.setSpacing(18)
-        self.main_layout.setObjectName("main_layout")
+        self.horizontalLayout = QtWidgets.QHBoxLayout(self.centralwidget)
+        self.horizontalLayout.setObjectName("horizontalLayout")
         self.left_layout = QtWidgets.QVBoxLayout()
-        self.left_layout.setSpacing(14)
         self.left_layout.setObjectName("left_layout")
-        self.file_group = QtWidgets.QGroupBox(self.centralwidget)
-        self.file_group.setMaximumHeight(100)
-        self.file_group.setObjectName("file_group")
-        self.file_group_layout = QtWidgets.QVBoxLayout(self.file_group)
-        self.file_group_layout.setContentsMargins(14, 14, 14, 14)
-        self.file_group_layout.setSpacing(12)
-        self.file_group_layout.setObjectName("file_group_layout")
-        self.btn_load = QtWidgets.QPushButton(self.file_group)
-        self.btn_load.setMinimumSize(QtCore.QSize(0, 42))
-        self.btn_load.setMaximumSize(QtCore.QSize(16777215, 42))
-        self.btn_load.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor))
-        self.btn_load.setFlat(False)
+        self.btn_load = QtWidgets.QPushButton(self.centralwidget)
         self.btn_load.setObjectName("btn_load")
-        self.file_group_layout.addWidget(self.btn_load)
-        self.left_layout.addWidget(self.file_group)
-        self.selection_group = QtWidgets.QGroupBox(self.centralwidget)
-        self.selection_group.setMaximumHeight(140)
-        self.selection_group.setObjectName("selection_group")
-        self.selection_group_layout = QtWidgets.QVBoxLayout(self.selection_group)
-        self.selection_group_layout.setContentsMargins(14, 14, 14, 14)
-        self.selection_group_layout.setSpacing(12)
-        self.selection_group_layout.setObjectName("selection_group_layout")
+        self.left_layout.addWidget(self.btn_load)
+        self.recent_label = QtWidgets.QLabel(self.centralwidget)
+        self.recent_label.setObjectName("recent_label")
+        self.left_layout.addWidget(self.recent_label)
+        self.recent_files_combo = QtWidgets.QComboBox(self.centralwidget)
+        self.recent_files_combo.setObjectName("recent_files_combo")
+        self.left_layout.addWidget(self.recent_files_combo)
+        self.mode_label = QtWidgets.QLabel(self.centralwidget)
+        self.mode_label.setObjectName("mode_label")
+        self.left_layout.addWidget(self.mode_label)
         self.mode_layout = QtWidgets.QHBoxLayout()
-        self.mode_layout.setSpacing(16)
         self.mode_layout.setObjectName("mode_layout")
-        self.radio_drag = QtWidgets.QRadioButton(self.selection_group)
+        self.radio_drag = QtWidgets.QRadioButton(self.centralwidget)
         self.radio_drag.setChecked(True)
-        self.radio_drag.setMinimumSize(QtCore.QSize(130, 30))
         self.radio_drag.setObjectName("radio_drag")
         self.mode_layout.addWidget(self.radio_drag)
-        self.radio_click = QtWidgets.QRadioButton(self.selection_group)
-        self.radio_click.setMinimumSize(QtCore.QSize(130, 30))
+        self.radio_click = QtWidgets.QRadioButton(self.centralwidget)
         self.radio_click.setObjectName("radio_click")
         self.mode_layout.addWidget(self.radio_click)
-        spacerItem = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
-        self.mode_layout.addItem(spacerItem)
-        self.selection_group_layout.addLayout(self.mode_layout)
-        self.size_layout = QtWidgets.QHBoxLayout()
-        self.size_layout.setSpacing(12)
-        self.size_layout.setObjectName("size_layout")
-        self.size_label = QtWidgets.QLabel(self.selection_group)
-        self.size_label.setStyleSheet("font-weight: bold; font-size: 12px; padding: 4px;")
-        self.size_label.setMinimumSize(QtCore.QSize(50, 28))
+        self.size_label = QtWidgets.QLabel(self.centralwidget)
         self.size_label.setObjectName("size_label")
-        self.size_layout.addWidget(self.size_label)
-        self.click_size_input = QtWidgets.QSpinBox(self.selection_group)
-        self.click_size_input.setMinimumSize(QtCore.QSize(90, 32))
-        self.click_size_input.setMaximumSize(QtCore.QSize(110, 32))
+        self.mode_layout.addWidget(self.size_label)
+        self.click_size_input = QtWidgets.QSpinBox(self.centralwidget)
         self.click_size_input.setMinimum(10)
         self.click_size_input.setMaximum(200)
         self.click_size_input.setProperty("value", 40)
         self.click_size_input.setObjectName("click_size_input")
-        self.size_layout.addWidget(self.click_size_input)
-        spacerItem1 = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
-        self.size_layout.addItem(spacerItem1)
-        self.selection_group_layout.addLayout(self.size_layout)
-        self.left_layout.addWidget(self.selection_group)
-        self.image_group = QtWidgets.QGroupBox(self.centralwidget)
-        self.image_group.setObjectName("image_group")
-        self.image_group_layout = QtWidgets.QVBoxLayout(self.image_group)
-        self.image_group_layout.setContentsMargins(12, 12, 12, 12)
-        self.image_group_layout.setSpacing(10)
-        self.image_group_layout.setObjectName("image_group_layout")
-        self.scroll_area = QtWidgets.QScrollArea(self.image_group)
-        self.scroll_area.setMinimumSize(QtCore.QSize(430, 430))
-        self.scroll_area.setWidgetResizable(False)
-        self.scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
-        self.scroll_area.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
+        self.mode_layout.addWidget(self.click_size_input)
+        self.left_layout.addLayout(self.mode_layout)
+        self.view_mode_layout = QtWidgets.QHBoxLayout()
+        self.view_mode_layout.setObjectName("view_mode_layout")
+        self.btn_sfr_mode = QtWidgets.QPushButton(self.centralwidget)
+        self.btn_sfr_mode.setCheckable(True)
+        self.btn_sfr_mode.setChecked(True)
+        self.btn_sfr_mode.setObjectName("btn_sfr_mode")
+        self.view_mode_layout.addWidget(self.btn_sfr_mode)
+        self.btn_view_mode = QtWidgets.QPushButton(self.centralwidget)
+        self.btn_view_mode.setCheckable(True)
+        self.btn_view_mode.setObjectName("btn_view_mode")
+        self.view_mode_layout.addWidget(self.btn_view_mode)
+        self.left_layout.addLayout(self.view_mode_layout)
+        self.scroll_area = QtWidgets.QScrollArea(self.centralwidget)
+        self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setObjectName("scroll_area")
-        self.scroll_area_contents = QtWidgets.QWidget()
-        self.scroll_area_contents.setGeometry(QtCore.QRect(0, 0, 640, 640))
-        self.scroll_area_contents.setObjectName("scroll_area_contents")
-        self.scroll_area.setWidget(self.scroll_area_contents)
-        self.image_group_layout.addWidget(self.scroll_area)
-        self.left_layout.addWidget(self.image_group)
-        self.roi_group = QtWidgets.QGroupBox(self.centralwidget)
-        self.roi_group.setObjectName("roi_group")
-        self.roi_container_layout = QtWidgets.QVBoxLayout(self.roi_group)
-        self.roi_container_layout.setContentsMargins(14, 14, 14, 14)
-        self.roi_container_layout.setSpacing(12)
+        self.scrollAreaWidgetContents = QtWidgets.QWidget()
+        self.scrollAreaWidgetContents.setGeometry(QtCore.QRect(0, 0, 786, 499))
+        self.scrollAreaWidgetContents.setObjectName("scrollAreaWidgetContents")
+        self.verticalLayout_2 = QtWidgets.QVBoxLayout(self.scrollAreaWidgetContents)
+        self.verticalLayout_2.setObjectName("verticalLayout_2")
+        self.image_label = QtWidgets.QLabel(self.scrollAreaWidgetContents)
+        self.image_label.setText("")
+        self.image_label.setObjectName("image_label")
+        self.verticalLayout_2.addWidget(self.image_label)
+        self.scroll_area.setWidget(self.scrollAreaWidgetContents)
+        self.left_layout.addWidget(self.scroll_area)
+        self.roi_container_layout = QtWidgets.QVBoxLayout()
         self.roi_container_layout.setObjectName("roi_container_layout")
-        self.roi_preview_label = QtWidgets.QLabel(self.roi_group)
-        self.roi_preview_label.setMinimumSize(QtCore.QSize(0, 130))
-        self.roi_preview_label.setMaximumSize(QtCore.QSize(16777215, 130))
-        self.roi_preview_label.setStyleSheet("\n"
-"border: 3px dashed #3498db;\n"
-"background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #ecf0f1, stop:1 #d5dbdb);\n"
-"border-radius: 8px;\n"
-"font-size: 14px;\n"
-"font-weight: bold;\n"
-"color: #7f8c8d;\n"
-"            ")
+        self.roi_preview_label = QtWidgets.QLabel(self.centralwidget)
         self.roi_preview_label.setAlignment(QtCore.Qt.AlignCenter)
-        self.roi_preview_label.setScaledContents(False)
         self.roi_preview_label.setObjectName("roi_preview_label")
         self.roi_container_layout.addWidget(self.roi_preview_label)
-        self.roi_size_label = QtWidgets.QLabel(self.roi_group)
-        self.roi_size_label.setMinimumSize(QtCore.QSize(0, 38))
-        self.roi_size_label.setMaximumSize(QtCore.QSize(16777215, 38))
-        self.roi_size_label.setStyleSheet("\n"
-"background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #e8f6f3, stop:1 #d1f2eb);\n"
-"border: 2px solid #1abc9c;\n"
-"border-radius: 6px;\n"
-"padding: 10px;\n"
-"font-weight: bold;\n"
-"font-size: 13px;\n"
-"color: #16a085;\n"
-"            ")
+        self.roi_size_label = QtWidgets.QLabel(self.centralwidget)
         self.roi_size_label.setAlignment(QtCore.Qt.AlignCenter)
         self.roi_size_label.setObjectName("roi_size_label")
         self.roi_container_layout.addWidget(self.roi_size_label)
-        self.left_layout.addWidget(self.roi_group)
-        spacerItem2 = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
-        self.left_layout.addItem(spacerItem2)
-        self.main_layout.addLayout(self.left_layout)
+        self.left_layout.addLayout(self.roi_container_layout)
+        self.horizontalLayout.addLayout(self.left_layout)
         self.right_layout = QtWidgets.QVBoxLayout()
-        self.right_layout.setSpacing(14)
         self.right_layout.setObjectName("right_layout")
-        self.analysis_group = QtWidgets.QGroupBox(self.centralwidget)
-        self.analysis_group.setMaximumHeight(160)
-        self.analysis_group.setObjectName("analysis_group")
-        self.analysis_layout = QtWidgets.QVBoxLayout(self.analysis_group)
-        self.analysis_layout.setContentsMargins(14, 14, 14, 14)
-        self.analysis_layout.setSpacing(12)
-        self.analysis_layout.setObjectName("analysis_layout")
         self.method_layout = QtWidgets.QHBoxLayout()
-        self.method_layout.setSpacing(12)
         self.method_layout.setObjectName("method_layout")
-        self.method_label = QtWidgets.QLabel(self.analysis_group)
-        self.method_label.setStyleSheet("font-weight: bold; font-size: 12px; padding: 4px;")
-        self.method_label.setMinimumSize(QtCore.QSize(110, 28))
+        self.method_label = QtWidgets.QLabel(self.centralwidget)
         self.method_label.setObjectName("method_label")
         self.method_layout.addWidget(self.method_label)
-        self.method_combo = QtWidgets.QComboBox(self.analysis_group)
-        self.method_combo.setMinimumSize(QtCore.QSize(150, 32))
-        self.method_combo.setMaximumSize(QtCore.QSize(200, 32))
-        self.method_combo.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor))
+        self.method_combo = QtWidgets.QComboBox(self.centralwidget)
         self.method_combo.setObjectName("method_combo")
         self.method_combo.addItem("")
         self.method_combo.addItem("")
@@ -313,104 +107,103 @@ class Ui_MainWindow(object):
         self.method_combo.addItem("")
         self.method_combo.addItem("")
         self.method_layout.addWidget(self.method_combo)
-        self.ny_label = QtWidgets.QLabel(self.analysis_group)
-        self.ny_label.setStyleSheet("font-weight: bold; font-size: 12px; padding: 4px; margin-left: 16px;")
-        self.ny_label.setMinimumSize(QtCore.QSize(70, 28))
-        self.ny_label.setObjectName("ny_label")
-        self.method_layout.addWidget(self.ny_label)
-        self.ny_freq_input = QtWidgets.QLineEdit(self.analysis_group)
-        self.ny_freq_input.setMinimumSize(QtCore.QSize(80, 32))
-        self.ny_freq_input.setMaximumSize(QtCore.QSize(100, 32))
-        self.ny_freq_input.setAlignment(QtCore.Qt.AlignCenter)
-        self.ny_freq_input.setObjectName("ny_freq_input")
-        self.method_layout.addWidget(self.ny_freq_input)
-        spacerItem3 = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
-        self.method_layout.addItem(spacerItem3)
-        self.analysis_layout.addLayout(self.method_layout)
-        self.options_layout = QtWidgets.QHBoxLayout()
-        self.options_layout.setSpacing(16)
-        self.options_layout.setObjectName("options_layout")
-        self.stabilize_checkbox = QtWidgets.QCheckBox(self.analysis_group)
-        self.stabilize_checkbox.setStyleSheet("font-size: 12px; padding: 4px;")
-        self.stabilize_checkbox.setMinimumSize(QtCore.QSize(0, 30))
-        self.stabilize_checkbox.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor))
+        self.right_layout.addLayout(self.method_layout)
+        self.stabilize_layout = QtWidgets.QHBoxLayout()
+        self.stabilize_layout.setObjectName("stabilize_layout")
+        self.stabilize_checkbox = QtWidgets.QCheckBox(self.centralwidget)
         self.stabilize_checkbox.setObjectName("stabilize_checkbox")
-        self.options_layout.addWidget(self.stabilize_checkbox)
-        spacerItem4 = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
-        self.options_layout.addItem(spacerItem4)
-        self.analysis_layout.addLayout(self.options_layout)
-        self.right_layout.addWidget(self.analysis_group)
-        self.status_group = QtWidgets.QGroupBox(self.centralwidget)
-        self.status_group.setMaximumHeight(90)
-        self.status_group.setObjectName("status_group")
-        self.status_layout = QtWidgets.QHBoxLayout(self.status_group)
-        self.status_layout.setContentsMargins(14, 14, 14, 14)
-        self.status_layout.setSpacing(12)
-        self.status_layout.setObjectName("status_layout")
-        self.info_label = QtWidgets.QLabel(self.status_group)
-        self.info_label.setMinimumSize(QtCore.QSize(0, 48))
-        self.info_label.setStyleSheet("\n"
-"background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ffffff, stop:1 #f8f9fa);\n"
-"padding: 14px 18px;\n"
-"border: 2px solid #27ae60;\n"
-"border-radius: 8px;\n"
-"font-size: 13px;\n"
-"font-weight: bold;\n"
-"color: #27ae60;\n"
-"            ")
-        self.info_label.setWordWrap(True)
+        self.stabilize_layout.addWidget(self.stabilize_checkbox)
+        self.right_layout.addLayout(self.stabilize_layout)
+        self.edge_threshold_layout = QtWidgets.QHBoxLayout()
+        self.edge_threshold_layout.setObjectName("edge_threshold_layout")
+        self.edge_detect_checkbox = QtWidgets.QCheckBox(self.centralwidget)
+        self.edge_detect_checkbox.setObjectName("edge_detect_checkbox")
+        self.edge_threshold_layout.addWidget(self.edge_detect_checkbox)
+        self.edge_label = QtWidgets.QLabel(self.centralwidget)
+        self.edge_label.setObjectName("edge_label")
+        self.edge_threshold_layout.addWidget(self.edge_label)
+        self.edge_threshold_slider = QtWidgets.QSlider(self.centralwidget)
+        self.edge_threshold_slider.setMinimum(10)
+        self.edge_threshold_slider.setMaximum(200)
+        self.edge_threshold_slider.setProperty("value", 50)
+        self.edge_threshold_slider.setOrientation(QtCore.Qt.Horizontal)
+        self.edge_threshold_slider.setObjectName("edge_threshold_slider")
+        self.edge_threshold_layout.addWidget(self.edge_threshold_slider)
+        self.edge_threshold_value_label = QtWidgets.QLabel(self.centralwidget)
+        self.edge_threshold_value_label.setObjectName("edge_threshold_value_label")
+        self.edge_threshold_layout.addWidget(self.edge_threshold_value_label)
+        self.btn_apply_edge = QtWidgets.QPushButton(self.centralwidget)
+        self.btn_apply_edge.setObjectName("btn_apply_edge")
+        self.edge_threshold_layout.addWidget(self.btn_apply_edge)
+        self.btn_erase_edge = QtWidgets.QPushButton(self.centralwidget)
+        self.btn_erase_edge.setObjectName("btn_erase_edge")
+        self.edge_threshold_layout.addWidget(self.btn_erase_edge)
+        self.right_layout.addLayout(self.edge_threshold_layout)
+        self.info_ny_layout = QtWidgets.QHBoxLayout()
+        self.info_ny_layout.setObjectName("info_ny_layout")
+        self.info_label = QtWidgets.QLabel(self.centralwidget)
         self.info_label.setObjectName("info_label")
-        self.status_layout.addWidget(self.info_label)
-        self.right_layout.addWidget(self.status_group)
-        self.chart_group = QtWidgets.QGroupBox(self.centralwidget)
-        self.chart_group.setObjectName("chart_group")
-        self.chart_layout = QtWidgets.QVBoxLayout(self.chart_group)
-        self.chart_layout.setContentsMargins(12, 12, 12, 12)
-        self.chart_layout.setSpacing(10)
-        self.chart_layout.setObjectName("chart_layout")
-        self.canvas_placeholder = QtWidgets.QWidget(self.chart_group)
-        self.canvas_placeholder.setMinimumSize(QtCore.QSize(900, 550))
-        self.canvas_placeholder.setStyleSheet("\n"
-"background: white;\n"
-"border: 2px solid #bdc3c7;\n"
-"border-radius: 8px;\n"
-"            ")
+        self.info_ny_layout.addWidget(self.info_label)
+        self.ny_label = QtWidgets.QLabel(self.centralwidget)
+        self.ny_label.setObjectName("ny_label")
+        self.info_ny_layout.addWidget(self.ny_label)
+        self.ny_freq_input = QtWidgets.QLineEdit(self.centralwidget)
+        self.ny_freq_input.setObjectName("ny_freq_input")
+        self.info_ny_layout.addWidget(self.ny_freq_input)
+        self.right_layout.addLayout(self.info_ny_layout)
+        self.canvas_placeholder = QtWidgets.QWidget(self.centralwidget)
         self.canvas_placeholder.setObjectName("canvas_placeholder")
-        self.chart_layout.addWidget(self.canvas_placeholder)
-        self.right_layout.addWidget(self.chart_group)
-        self.main_layout.addLayout(self.right_layout)
+        self.right_layout.addWidget(self.canvas_placeholder)
+        self.horizontalLayout.addLayout(self.right_layout)
         MainWindow.setCentralWidget(self.centralwidget)
+        self.menubar = QtWidgets.QMenuBar(MainWindow)
+        self.menubar.setGeometry(QtCore.QRect(0, 0, 1600, 22))
+        self.menubar.setObjectName("menubar")
+        MainWindow.setMenuBar(self.menubar)
+        self.statusbar = QtWidgets.QStatusBar(MainWindow)
+        self.statusbar.setObjectName("statusbar")
+        MainWindow.setStatusBar(self.statusbar)
 
         self.retranslateUi(MainWindow)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
-        MainWindow.setWindowTitle(_translate("MainWindow", "pyTools SFR Analyzer"))
-        self.file_group.setTitle(_translate("MainWindow", "📁 File Operations"))
-        self.btn_load.setText(_translate("MainWindow", "📂 Load .raw File"))
-        self.selection_group.setTitle(_translate("MainWindow", "🎯 Selection Mode"))
-        self.radio_drag.setText(_translate("MainWindow", "✋ Drag Select"))
-        self.radio_click.setText(_translate("MainWindow", "👆 Click Select"))
+        MainWindow.setWindowTitle(_translate("MainWindow", "pyTools_ResoLab"))
+        self.btn_load.setText(_translate("MainWindow", "Load .raw File"))
+        self.recent_label.setText(_translate("MainWindow", "Recent Files:"))
+        self.mode_label.setText(_translate("MainWindow", "Selection Mode:"))
+        self.radio_drag.setText(_translate("MainWindow", "Drag Select"))
+        self.radio_click.setText(_translate("MainWindow", "Click (40x40)"))
         self.size_label.setText(_translate("MainWindow", "Size:"))
-        self.click_size_input.setSuffix(_translate("MainWindow", " px"))
-        self.image_group.setTitle(_translate("MainWindow", "🖼️ Image View"))
-        self.roi_group.setTitle(_translate("MainWindow", "🔍 ROI Preview"))
-        self.roi_preview_label.setText(_translate("MainWindow", "Select an area to preview ROI"))
-        self.roi_size_label.setText(_translate("MainWindow", "📐 Size: --- × ---"))
-        self.analysis_group.setTitle(_translate("MainWindow", "⚙️ Analysis Settings"))
-        self.method_label.setText(_translate("MainWindow", "LSF Smoothing:"))
-        self.method_combo.setItemText(0, _translate("MainWindow", "Savitzky-Golay"))
-        self.method_combo.setItemText(1, _translate("MainWindow", "Gaussian"))
-        self.method_combo.setItemText(2, _translate("MainWindow", "Median"))
-        self.method_combo.setItemText(3, _translate("MainWindow", "Uniform"))
-        self.method_combo.setItemText(4, _translate("MainWindow", "Butterworth"))
-        self.method_combo.setItemText(5, _translate("MainWindow", "Wiener"))
-        self.method_combo.setItemText(6, _translate("MainWindow", "None"))
-        self.ny_label.setText(_translate("MainWindow", "Nyquist:"))
+        self.btn_sfr_mode.setText(_translate("MainWindow", "📊 SFR"))
+        self.btn_view_mode.setText(_translate("MainWindow", "🖐 VIEW"))
+        self.roi_preview_label.setText(_translate("MainWindow", "ROI Preview"))
+        self.roi_size_label.setText(_translate("MainWindow", "Size: ---"))
+        self.method_label.setText(_translate("MainWindow", "LSF Smoothing Method:"))
+        self.method_combo.setItemText(0, _translate("MainWindow", "savgol"))
+        self.method_combo.setItemText(1, _translate("MainWindow", "gaussian"))
+        self.method_combo.setItemText(2, _translate("MainWindow", "median"))
+        self.method_combo.setItemText(3, _translate("MainWindow", "uniform"))
+        self.method_combo.setItemText(4, _translate("MainWindow", "butterworth"))
+        self.method_combo.setItemText(5, _translate("MainWindow", "wiener"))
+        self.method_combo.setItemText(6, _translate("MainWindow", "none"))
+        self.stabilize_checkbox.setText(_translate("MainWindow", "SFR Stabilize Filter (Average 3 samples)"))
+        self.edge_detect_checkbox.setText(_translate("MainWindow", "Edge Detect"))
+        self.edge_label.setText(_translate("MainWindow", "Threshold:"))
+        self.edge_threshold_value_label.setText(_translate("MainWindow", "50"))
+        self.btn_apply_edge.setText(_translate("MainWindow", "Apply Edge"))
+        self.btn_erase_edge.setText(_translate("MainWindow", "Erase Edge"))
+        self.info_label.setText(_translate("MainWindow", "Status: Ready"))
+        self.ny_label.setText(_translate("MainWindow", "Ny:"))
         self.ny_freq_input.setText(_translate("MainWindow", "0.5"))
-        self.ny_freq_input.setToolTip(_translate("MainWindow", "Nyquist frequency (0.0-1.0)"))
-        self.stabilize_checkbox.setText(_translate("MainWindow", "🔄 SFR Stabilize Filter (Average 3 samples)"))
-        self.status_group.setTitle(_translate("MainWindow", "📊 Status"))
-        self.info_label.setText(_translate("MainWindow", "✅ Ready - Load a .raw file to begin analysis"))
-        self.chart_group.setTitle(_translate("MainWindow", "📈 SFR Analysis Results"))
+
+
+if __name__ == "__main__":
+    import sys
+    app = QtWidgets.QApplication(sys.argv)
+    MainWindow = QtWidgets.QMainWindow()
+    ui = Ui_MainWindow()
+    ui.setupUi(MainWindow)
+    MainWindow.show()
+    sys.exit(app.exec_())
