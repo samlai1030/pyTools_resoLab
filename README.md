@@ -1,73 +1,101 @@
-# pyTools_ResoLab - SFR Analyzer with Advanced Features
+# pyTools_ResoLab - Professional SFR/MTF Analyzer
 
-A professional-grade Spatial Frequency Response (SFR) analyzer built with PyQt5 for analyzing raw camera images with advanced optical measurement capabilities.
+A professional-grade Spatial Frequency Response (SFR) / Modulation Transfer Function (MTF) analyzer built with PyQt5, following **ISO 12233:2023** standard for analyzing raw camera images.
 
 ## 🎯 Project Status
 
 **Status**: Production Ready ✅  
-**Version**: 2.0  
-**Last Updated**: December 2, 2025  
+**Version**: 2.4  
+**Last Updated**: December 5, 2025  
 **GitHub**: https://github.com/samlai1030/pyTools_ResoLab
+
+---
 
 ## ✨ Features
 
-### Image Processing & Visualization
-- **Load Raw Images**: Support for uint8, uint16, and float32 data types
-- **Mouse Wheel Zoom**: 0.5x to 5.0x zoom with smooth scaling
-- **Scrollbars**: Horizontal and vertical navigation for zoomed images
-- **Green Crosshair Overlay**: Center reference lines at image midpoint
-- **Professional Layout**: Real-time image and plot display
+### 📁 Image Loading
+- **RAW Image Support**: uint8, uint16, float32 data types
+- **Auto-Detection**: Automatic width/height detection from filename and file size
+- **Recent Files**: Quick access to last 10 opened files via combo box
+- **Persistent History**: Recent files saved between sessions
 
-### ROI Selection & Display
-- **Dual Selection Modes**:
-  - **Drag Mode**: Draw custom rectangle around ROI
-  - **Click Mode**: Single-click to select fixed size area (configurable 30-60px)
-- **SFR Value Display**: Shows SFR result at top-left corner of ROI (14pt bold white text)
-- **Visual Feedback**: Red selection squares with corner markers
-- **Real-time ROI Preview**: Separate area showing selected region with dimensions
+### 🎯 ROI Selection Modes
+| Mode | Description |
+|------|-------------|
+| **Drag Select** | Click and drag to select any custom ROI size |
+| **Click Select** | Single click to select fixed-size area (default 40×40, configurable 10-200) |
 
-### Edge Detection
-- **Automatic Edge Orientation Detection**:
-  - V-Edge (Vertical): Detects vertical edges for horizontal MTF testing
-  - H-Edge (Horizontal): Detects horizontal edges for vertical MTF testing
-  - Mixed: Identifies unclear or diagonal edges
-- **Confidence Scoring**: 0-100% confidence metrics for detection reliability
-- **Advanced Edge Validation**: Automatic validation of edge quality and contrast
+### 👁️ View Modes
+| Mode | Description |
+|------|-------------|
+| **📊 SFR** | Select ROI for SFR/MTF analysis |
+| **🖐 VIEW** | Pan/scroll image with mouse drag |
 
-### SFR Analysis & Stabilization
-- **Standard SFR Calculation**: Single measurement mode
-- **SFR Stabilize Filter** ✨ **NEW**: 
-  - Multi-sample averaging (3 samples)
-  - Automatic noise reduction
-  - Stability metrics display (±X%)
-  - Works seamlessly in both display modes
-- **MTF Computation**: Calculates Modulation Transfer Function
-- **ny/4 Reference Line**: Shows Nyquist frequency quarter reference
-- **ny/4 SFR Value Display**: Text annotation with interpolated values
-- **FFT-based Analysis**: Uses Fourier transform for accurate frequency response
-- **4x Supersampling**: Improves SFR result accuracy with compensation
+### 🔍 Edge Detection
+- **Automatic Orientation Detection**: V-Edge (Vertical) / H-Edge (Horizontal)
+- **Confidence Scoring**: 0-100% reliability metrics
+- **Adjustable Threshold**: Slider control (10-200)
+- **Canny Edge Overlay**: Visual edge preview on image
+- **Apply/Erase Edge**: Lock or clear edge pattern as reference
 
-### Advanced Features
-- **6 LSF Smoothing Methods**: savgol, gaussian, median, uniform, butterworth, wiener
-- **Adjustable Nyquist Frequency**: User-configurable frequency reference (0.0-1.0)
-- **White Area Compensation**: Bias and noise correction options
-- **Professional Plotting**: Three-subplot layout (ESF, LSF, SFR)
+### 📈 SFR Analysis (ISO 12233:2023 Compliant)
+- **4× Supersampling**: Improved accuracy with frequency compensation
+- **ESF Calculation**: Edge Spread Function
+- **LSF Calculation**: Line Spread Function with FWHM display
+- **FFT-based MTF**: Accurate frequency response computation
+- **White Area Compensation**: Bias and noise correction
+- **Ny/4 Reference**: Nyquist quarter frequency marker with SFR value
 
-### User Interface
-- **Responsive Design**: Smooth, lag-free interaction
+### 🔧 LSF Smoothing Methods
+| Method | Description |
+|--------|-------------|
+| `none` | No smoothing (default) |
+| `savgol` | Savitzky-Golay filter |
+| `gaussian` | Gaussian smoothing |
+| `median` | Median filter |
+| `uniform` | Uniform/box filter |
+| `butterworth` | Butterworth IIR filter |
+| `wiener` | Wiener adaptive filter |
+
+### ⚡ SFR Stabilization
+- **3-Sample Averaging**: Optional multi-sample averaging for stable measurements
+- **Noise Reduction**: Automatic noise suppression
+- **Stability Metrics**: Standard deviation display
+
+### 🎚️ Nyquist Frequency Control
+- **Adjustable Range**: 0.10 to 1.00 via slider
+- **Real-time Update**: SFR plot updates instantly when slider changes
+- **Ny/4 Reference Line**: Green dashed line on SFR plot
+
+### 📊 Visualization (2×2 Subplot Layout)
+| Position | Content |
+|----------|---------|
+| Top-Left | **SFR/MTF Curve** with Ny/4 reference line |
+| Top-Right | **ROI Image** preview with dimensions |
+| Bottom-Left | **ESF** (Edge Spread Function) |
+| Bottom-Right | **LSF** (Line Spread Function) with FWHM |
+
+### 🖥️ UI Features
+- **Resizable Panels**: Splitter control between image and plot areas
+- **Group Boxes**: Organized controls (File, Selection Mode, Image View, SFR Result, Nyquist)
+- **Mouse Wheel Zoom**: 0.5x to 5.0x with smooth scaling
 - **Status Display**: Real-time edge type, confidence, MTF50, and SFR values
-- **Interactive Controls**: Dropdown menus, input boxes, radio buttons
-- **Clean Layout**: Intuitive organization with image and analysis areas
+- **SFR Overlay**: Value displayed at ROI position on image
+
+---
 
 ## 📋 Requirements
 
 ```
-PyQt5>=5.15
-numpy>=1.20
-scipy>=1.7
-opencv-python>=4.5
-matplotlib>=3.3
+PyQt5>=5.15.0
+numpy>=1.21.0
+scipy>=1.7.0
+opencv-python>=4.5.0
+matplotlib>=3.3.0
+pillow>=10.0.0
 ```
+
+---
 
 ## 📦 Installation
 
@@ -83,210 +111,129 @@ pip install -r requirements.txt
 python main.py
 ```
 
+---
+
 ## 🚀 Usage
 
 ### Basic Workflow
-1. **Load Image**: Click "Load .raw File" button
-2. **Set Dimensions**: Enter image width, height, and data type
-3. **Navigate**: Use mouse wheel to zoom (0.5x - 5.0x) and scrollbars to pan
-4. **Select ROI**: 
-   - Drag mode: Draw rectangle around edge
-   - Click mode: Single click to select predefined size
+
+1. **Load Image**: Click `Load .raw` or select from Recent Files
+2. **Set Dimensions**: Enter width, height, and data type (if not auto-detected)
+3. **Select Mode**: Choose `Drag Select` or `Click` for ROI selection
+4. **Select ROI**: Click/drag on a slant edge in the image
 5. **View Results**: 
-   - SFR value appears at top-left corner of ROI
-   - Three plots display: ESF, LSF, SFR
-   - Status bar shows metrics (confidence, MTF50, etc.)
-6. **Analyze**: 
-   - Optional: Enable "SFR Stabilize Filter" for noise reduction
-   - Select LSF smoothing method for processing
-   - Adjust Nyquist frequency as needed
+   - 2×2 plot displays ESF, LSF, SFR, and ROI image
+   - Status bar shows edge type, confidence, MTF50, SFR@Ny/4
+6. **Adjust Settings**:
+   - LSF smoothing method
+   - Nyquist frequency slider
+   - SFR Stabilize checkbox
 
-### Advanced Features
-```bash
-# Enable Stabilize Filter
-# Check the "SFR Stabilize Filter" checkbox
-# Takes 3 samples and averages for stable results
+### Keyboard & Mouse Controls
 
-# Adjust LSF Smoothing
-# Select from 6 methods: savgol, gaussian, median, uniform, butterworth, wiener
+| Action | Control |
+|--------|---------|
+| Zoom In/Out | Mouse Wheel |
+| Pan Image | Right-click drag (or VIEW mode + left-click) |
+| Select ROI | Left-click drag (SFR mode) |
+| Quick Select | Left-click (Click mode) |
 
-# Set Nyquist Frequency
-# Enter value (0.0-1.0) in the Nyquist input box
-```
+---
 
 ## 🏗️ Architecture
 
-### Main Components
+```
+pyTools_ResoLab/
+├── main.py              # Main application (MainWindow, ImageLabel, SFRCalculator)
+├── mainUI.py            # Generated UI code (from pyuic5)
+├── mainUI.ui            # Qt Designer UI file
+├── requirements.txt     # Python dependencies
+├── recent_files.json    # Persistent recent files list
+└── README.md            # This file
+```
 
-**ImageLabel** (Custom QLabel)
-- Image display with zoom support
-- ROI selection (drag & click modes)
-- SFR value rendering at top-left corner
-- Green crosshair overlay
-- Coordinate conversion for zoomed images
-- Selection square visualization
+### Core Components
 
-**SFRCalculator** (Static Analysis Engine)
-- Edge detection and classification
-- Edge quality validation
-- SFR/MTF computation
-- LSF smoothing methods (6 types)
-- White area compensation
-- ny/4 interpolation
+| Component | Description |
+|-----------|-------------|
+| `SFRCalculator` | Static class for ISO 12233:2023 SFR/MTF computation |
+| `ImageLabel` | Custom QLabel with zoom, pan, ROI selection |
+| `MainWindow` | Main application window with UI controls |
+| `Ui_MainWindow` | Auto-generated UI from Qt Designer |
 
-**MainWindow** (PyQt5 Application)
-- Dual-panel layout (image + plots)
-- ROI processing workflow
-- Real-time visualization
-- Control panel with:
-  - Selection mode toggle
-  - Click size input
-  - LSF smoothing method selector
-  - SFR Stabilize Filter checkbox
-  - Nyquist frequency input
+---
 
 ## 📊 Features Matrix
 
-| Feature | Standard | Stabilize | Status |
-|---------|----------|-----------|--------|
-| Single ROI Selection | ✅ | ✅ | Working |
-| ROI SFR Display | ✅ | ✅ | Working |
-| Multi-sample Averaging | ❌ | ✅ | New in v2.0 |
-| Edge Detection | ✅ | ✅ | Validated |
-| Zoom & Pan | ✅ | ✅ | Smooth |
-| 6 Smoothing Methods | ✅ | ✅ | All Available |
-| ny/4 Reference | ✅ | ✅ | With Value |
-| Green Crosshair | ✅ | ✅ | Display |
-| Stability Metrics | ❌ | ✅ | New in v2.0 |
+| Feature | Status | Description |
+|---------|--------|-------------|
+| RAW Image Loading | ✅ | uint8, uint16, float32 support |
+| Auto W/H Detection | ✅ | From filename and file size |
+| Recent Files | ✅ | Persistent combo box (10 files) |
+| Drag/Click Selection | ✅ | Dual ROI selection modes |
+| SFR/VIEW Modes | ✅ | Analysis and pan modes |
+| Edge Detection | ✅ | V-Edge, H-Edge with confidence |
+| ISO 12233:2023 SFR | ✅ | 4× supersampling, FFT-based |
+| LSF Smoothing | ✅ | 7 methods including none |
+| SFR Stabilize | ✅ | 3-sample averaging |
+| Nyquist Slider | ✅ | Real-time plot update |
+| 2×2 Plot Layout | ✅ | SFR, ROI, ESF, LSF |
+| Resizable Panels | ✅ | Splitter control |
+| FWHM Display | ✅ | On LSF plot |
 
-## 🔧 Recent Updates (v2.0)
+---
 
-✅ **Fixed Crashes**
-- Resolved duplicate paintEvent method issue
-- Fixed painter resource conflicts
-- Stabilized click-mode ROI processing
+## 🔧 Building Executable
 
-✅ **SFR Display Enhancement**
-- Added SFR value display at ROI top-left corner
-- Font size 14 for better visibility
-- Format: Percentage (38.42%)
-- Works in both normal and stabilize modes
+### macOS (.app)
 
-✅ **Stabilize Filter**
-- 3-sample multi-sample averaging
-- Automatic noise reduction
-- Stability metrics (±X%)
-- Complete SFR display integration
+```bash
+# Install PyInstaller
+pip install pyinstaller
 
-✅ **UI Improvements**
-- Automatic ROI square cleanup on new selection
-- Green crosshair overlay
-- Professional status messages
-- Improved error handling
+# Build with spec file (includes recursion limit fix)
+pyinstaller pyTools_ResoLab.spec
 
-✅ **Code Quality**
-- Removed SFR display from image overlay
-- Cleaned up imports
-- Consolidated painter operations
-- Comprehensive error checking
-
-## 🧪 Testing
-
-All core features have been tested and verified:
-- ✅ Edge detection (V-Edge, H-Edge)
-- ✅ ROI selection (drag & click modes)
-- ✅ SFR calculation and display
-- ✅ Stabilize filter (3-sample averaging)
-- ✅ Zoom functionality (0.5x - 5.0x)
-- ✅ LSF smoothing methods (6 types)
-- ✅ Nyquist frequency adjustment
-- ✅ Green crosshair overlay
-- ✅ ROI SFR value display
-- ✅ Multi-mode operation
-
-## 📁 Project Structure
-
-```
-pyTools_ResoLab/
-├── main.py              # Main application (1561 lines)
-├── requirements.txt           # Python dependencies
-├── setup.py                   # Package configuration
-├── .gitignore                 # Git rules
-├── README.md                  # This file
-├── run_sfr_app.sh             # Launch script
-├── py2app_build.sh            # macOS packaging
-├── makedown/                  # Documentation (40+ guides)
-│   ├── README.md
-│   ├── QUICKSTART.md
-│   ├── FINAL_PROJECT_STATUS.md
-│   ├── SFR_XAXIS_COMPENSATION_NY_INPUT.md
-│   ├── LSF_SMOOTHING_METHODS_KWARG.md
-│   └── ... (40+ more)
-└── [Other support files]
+# Output: dist/pyTools_ResoLab
 ```
 
-## 🎨 User Interface Layout
+### Create DMG
 
-```
-┌─────────────────────────────────────────┐
-│ Load .raw File    Selection: Drag/Click │
-├──────────────────┬──────────────────────┤
-│                  │ ESF Plot             │
-│  Raw Image       ├──────────────────────┤
-│  (640x640)       │ LSF Plot             │
-│  + Crosshair     ├──────────────────────┤
-│                  │ SFR Plot             │
-├──────────────────┴──────────────────────┤
-│ Status: Ready | MTF50: 0.250 | SFR: ... │
-└─────────────────────────────────────────┘
+```bash
+cd dist
+hdiutil create -volname "pyTools_ResoLab" -srcfolder . -ov -format UDZO pyTools_ResoLab_v2.4.dmg
 ```
 
-## ⚡ Performance
+---
 
-- Edge detection: ~5-10 ms
-- SFR calculation: ~1-2 ms
-- Stabilize filter (3 samples): ~3-6 ms
-- Total analysis latency: ~350-700 ms
-- Smooth zoom: < 50 ms per level
-- Responsive UI: No lag with normal operation
+## 📝 Changelog
 
-## 🔐 Quality Assurance
+### v2.4 (December 5, 2025)
+- UI layout reorganization with group boxes
+- Resizable left/right panels via splitter
+- Nyquist control moved to bottom with dedicated group box
+- SFR Result group box with compact horizontal layout
+- Edge Detection moved under Image View
+- LSF default filter set to "none"
+- Removed fixed figure size for flexible plot resizing
 
-- ✅ No syntax errors
-- ✅ All features tested and working
-- ✅ Professional error handling
-- ✅ Memory efficient
-- ✅ Clean code structure
-- ✅ Comprehensive documentation
+### v2.0 (December 2, 2025)
+- Initial production release
+- ISO 12233:2023 compliant SFR calculation
+- 2×2 subplot layout with ROI image
+- Recent files persistence
+- Auto W/H detection
 
-## 🚀 Future Enhancements
-
-- [ ] Batch ROI processing
-- [ ] Export results to CSV/PDF
-- [ ] Advanced visualization options
-- [ ] Slanted edge support
-- [ ] Customizable detection thresholds
-- [ ] Real-time preview refinement
+---
 
 ## 📄 License
 
 MIT License
 
-## 👤 Author
-
-Sam Lai (samlai1030)
-
-## 💬 Support
-
-For issues, questions, or contributions:
-- Create an issue on GitHub
-- Submit a pull request
-- Check the documentation in `makedown/` folder
-
 ---
 
-**Project**: pyTools_ResoLab  
-**Status**: ✅ Production Ready  
-**Version**: 2.0  
-**Updated**: December 2, 2025
+## 👤 Author
+
+**Sam Lai**  
+GitHub: [@samlai1030](https://github.com/samlai1030)
 
