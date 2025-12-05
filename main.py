@@ -997,8 +997,9 @@ class MainWindow(QMainWindow):
         canvas_layout.setContentsMargins(0, 0, 0, 0)
         canvas_layout.addWidget(self.canvas)
 
-        # Set the placeholder to expand properly
+        # Set the placeholder to expand properly with max width
         self.ui.canvas_placeholder.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.ui.canvas_placeholder.setMaximumWidth(500)
 
         # 2x2 subplot layout:
         # (0,0) = SFR/MTF  |  (0,1) = ROI Image
