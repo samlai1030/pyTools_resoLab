@@ -149,6 +149,8 @@ class Ui_MainWindow(object):
         self.ny_label.setObjectName("ny_label")
         self.info_ny_layout.addWidget(self.ny_label)
         self.ny_freq_slider = QtWidgets.QSlider(self.centralwidget)
+        self.ny_freq_slider.setMinimumSize(QtCore.QSize(100, 0))
+        self.ny_freq_slider.setMaximumSize(QtCore.QSize(350, 16777215))
         self.ny_freq_slider.setMinimum(10)
         self.ny_freq_slider.setMaximum(100)
         self.ny_freq_slider.setProperty("value", 50)

@@ -323,6 +323,18 @@
         </item>
         <item>
          <widget class="QSlider" name="ny_freq_slider">
+          <property name="minimumSize">
+           <size>
+            <width>100</width>
+            <height>0</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>350</width>
+            <height>16777215</height>
+           </size>
+          </property>
           <property name="minimum">
            <number>10</number>
           </property>
