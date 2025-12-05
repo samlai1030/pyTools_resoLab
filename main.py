@@ -987,10 +987,18 @@ class MainWindow(QMainWindow):
         self.figure.patch.set_facecolor("white")
         self.canvas = FigureCanvas(self.figure)
 
+        # Set size policy to allow the canvas to shrink/expand properly
+        from PyQt5.QtWidgets import QSizePolicy
+        self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.canvas.updateGeometry()
+
         # Create a layout for the placeholder and add the canvas
         canvas_layout = QVBoxLayout(self.ui.canvas_placeholder)
         canvas_layout.setContentsMargins(0, 0, 0, 0)
         canvas_layout.addWidget(self.canvas)
+
+        # Set the placeholder to expand properly
+        self.ui.canvas_placeholder.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         # 2x2 subplot layout:
         # (0,0) = SFR/MTF  |  (0,1) = ROI Image
@@ -1023,6 +1031,17 @@ class MainWindow(QMainWindow):
         self.ax_lsf.grid(True, alpha=0.3)
 
         self.figure.tight_layout()
+
+        # Connect resize event to update figure layout
+        self.canvas.mpl_connect('resize_event', self.on_canvas_resize)
+
+    def on_canvas_resize(self, event):
+        """Handle canvas resize to maintain proper figure layout"""
+        try:
+            self.figure.tight_layout()
+            self.canvas.draw_idle()
+        except Exception:
+            pass  # Ignore errors during resize
 
 
     def closeEvent(self, event):
