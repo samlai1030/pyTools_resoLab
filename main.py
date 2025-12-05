@@ -942,6 +942,12 @@ class MainWindow(QMainWindow):
         self.edge_overlay_applied = False  # Track if edge overlay is applied
         self.locked_edge_mask = None  # Store locked edge pattern (frozen when Apply Edge clicked)
 
+        # Nyquist frequency (0.1 to 1.0)
+        self.ny_frequency = 0.5
+
+        # Store last SFR data for re-plotting when Ny changes
+        self.last_sfr_data = None
+
         # Recent files list (max 10 files)
         self.recent_files = []
         self.max_recent_files = 10
@@ -965,7 +971,10 @@ class MainWindow(QMainWindow):
         self.ui.edge_threshold_slider.valueChanged.connect(self.on_edge_threshold_changed)
         self.ui.btn_apply_edge.clicked.connect(self.on_apply_edge)
         self.ui.btn_erase_edge.clicked.connect(self.on_erase_edge)
-        self.ui.ny_freq_input.editingFinished.connect(self.on_ny_freq_changed)
+        self.ui.ny_freq_slider.valueChanged.connect(self.on_ny_freq_slider_changed)
+
+        # Store current Ny frequency value (0.1 to 1.0, slider is 10-100)
+        self.ny_frequency = 0.5
 
         self.image_label = ImageLabel(self)
         self.ui.scroll_area.setWidget(self.image_label)
@@ -1402,18 +1411,20 @@ class MainWindow(QMainWindow):
                 f"Selection Mode: Click {self.click_select_size}×{self.click_select_size} (single click to select area)"
             )
 
-    def on_ny_freq_changed(self):
-        """Handle Nyquist frequency change"""
-        try:
-            ny_val = float(self.ui.ny_freq_input.text())
-            if ny_val <= 0 or ny_val > 1.0:
-                self.ui.ny_freq_input.setText("0.5")
-                self.ui.info_label.setText("Nyquist frequency must be between 0 and 1.0")
-            else:
-                self.ui.info_label.setText(f"Nyquist frequency set to {ny_val}")
-        except ValueError:
-            self.ui.ny_freq_input.setText("0.5")
-            self.ui.info_label.setText("Invalid Nyquist frequency value")
+    def on_ny_freq_slider_changed(self):
+        """Handle Nyquist frequency slider change and update SFR plot"""
+        # Slider value is 10-100, convert to 0.1-1.0
+        slider_val = self.ui.ny_freq_slider.value()
+        self.ny_frequency = slider_val / 100.0
+
+        # Update the label
+        self.ui.ny_freq_value_label.setText(f"{self.ny_frequency:.2f}")
+        self.ui.info_label.setText(f"Nyquist frequency set to {self.ny_frequency:.2f}")
+
+        # If we have stored SFR data, re-plot with new Ny frequency
+        if hasattr(self, 'last_sfr_data') and self.last_sfr_data is not None:
+            freqs, sfr_values, esf, lsf, edge_type, roi_image = self.last_sfr_data
+            self.plot_sfr(freqs, sfr_values, esf, lsf, edge_type, roi_image)
 
     def on_edge_threshold_changed(self):
         """Handle edge detection threshold slider change"""
@@ -1607,9 +1618,6 @@ class MainWindow(QMainWindow):
 
         roi = self.raw_data[y : y + h, x : x + w]
 
-        # Display ROI preview
-        self.display_roi_preview(roi)
-
         # 4. Detect Slit Edge and Edge Orientation (using adjustable threshold)
         is_edge, msg, edge_type, confidence = SFRCalculator.validate_edge(roi, threshold=self.edge_threshold)
 
@@ -1713,14 +1721,7 @@ class MainWindow(QMainWindow):
             self.plot_sfr(freqs, sfr_averaged, esf_averaged, lsf_averaged, edge_type, roi_image=roi)
 
             # Get SFR value at ny/4 for display (same calculation as in plot_sfr)
-            ny_frequency = 0.5  # Default Nyquist
-            if hasattr(self, 'ny_freq_input') and self.ny_freq_input:
-                try:
-                    ny_frequency = float(self.ny_freq_input.text())
-                    if ny_frequency <= 0 or ny_frequency > 1.0:
-                        ny_frequency = 0.5
-                except:
-                    ny_frequency = 0.5
+            ny_frequency = getattr(self, 'ny_frequency', 0.5)
 
             ny_4 = ny_frequency / 4
             frequencies_compensated = freqs * 4
@@ -1752,45 +1753,6 @@ class MainWindow(QMainWindow):
         else:
             self.ui.info_label.setText(f"Error: Could not collect valid edge samples")
 
-    def display_roi_preview(self, roi_image):
-        """Display preview of selected ROI with dimensions in separate areas"""
-        if roi_image is None or roi_image.size == 0:
-            return
-
-        # Get original ROI dimensions
-        h_orig, w_orig = roi_image.shape
-
-        # Normalize to 8-bit for display
-        if roi_image.dtype != np.uint8:
-            preview_data = (
-                (roi_image - roi_image.min())
-                / (roi_image.max() - roi_image.min() + 1e-10)
-                * 255
-            ).astype(np.uint8)
-        else:
-            preview_data = roi_image
-
-        # Create QPixmap from preview
-        h, w = preview_data.shape
-        bytes_per_line = w
-        q_img = QImage(
-            preview_data.tobytes(), w, h, bytes_per_line, QImage.Format_Grayscale8
-        )
-        pixmap = QPixmap.fromImage(q_img)
-
-        # Scale to fit in ROI preview area (max 350x200)
-        max_w, max_h = 350, 200
-        if pixmap.width() > max_w or pixmap.height() > max_h:
-            pixmap = pixmap.scaledToWidth(max_w, Qt.SmoothTransformation)
-
-        # Display image in ROI preview label (only image, no text)
-        self.ui.roi_preview_label.setPixmap(pixmap)
-
-        # Display size information in separate size label
-        self.ui.roi_size_label.setText(f"Size: {w_orig}×{h_orig} pixels")
-        self.ui.roi_size_label.setStyleSheet(
-            "border: 1px solid #999; background: #E6F3FF; padding: 8px; font-weight: bold; font-size: 12px; text-align: center; color: #003366;"
-        )
 
     def plot_sfr(self, frequencies, sfr_values, esf, lsf, edge_type="V-Edge", roi_image=None):
         """
@@ -1920,20 +1882,16 @@ class MainWindow(QMainWindow):
         except Exception as e:
             print(f"Could not calculate FWHM: {e}")
 
+        # Store last SFR data for re-plotting when Ny changes
+        self.last_sfr_data = (frequencies, sfr_values, esf, lsf, edge_type, roi_image)
+
         # Plot 3: SFR/MTF Result
         # Multiply frequencies by 4 to compensate for supersampling
         frequencies_compensated = frequencies * 4
         self.ax_sfr.plot(frequencies_compensated, sfr_values, "b-", linewidth=2.5, label="MTF")
 
-        # Get Nyquist frequency from user input (default 0.5)
-        ny_frequency = 0.5  # Default Nyquist
-        if hasattr(self, 'ny_freq_input') and self.ui.ny_freq_input:
-            try:
-                ny_frequency = float(self.ui.ny_freq_input.text())
-                if ny_frequency <= 0 or ny_frequency > 1.0:
-                    ny_frequency = 0.5
-            except:
-                ny_frequency = 0.5
+        # Get Nyquist frequency from stored value (default 0.5)
+        ny_frequency = getattr(self, 'ny_frequency', 0.5)
 
         # Calculate ny/4 reference position (ISO 12233:2023 compliant)
         # ny/4 = user_ny_frequency / 4
