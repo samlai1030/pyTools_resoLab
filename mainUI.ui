@@ -18,21 +18,39 @@
     <item>
      <layout class="QVBoxLayout" name="left_layout">
       <item>
-       <widget class="QPushButton" name="btn_load">
-        <property name="text">
-         <string>Load .raw File</string>
+       <widget class="QGroupBox" name="file_group_box">
+        <property name="title">
+         <string>File</string>
         </property>
+        <layout class="QHBoxLayout" name="file_layout">
+         <item>
+          <widget class="QPushButton" name="btn_load">
+           <property name="text">
+            <string>Load .raw</string>
+           </property>
+           <property name="minimumSize">
+            <size>
+             <width>100</width>
+             <height>30</height>
+            </size>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QComboBox" name="recent_files_combo">
+           <property name="minimumSize">
+            <size>
+             <width>200</width>
+             <height>30</height>
+            </size>
+           </property>
+           <property name="toolTip">
+            <string>Recent Files</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
        </widget>
-      </item>
-      <item>
-       <widget class="QLabel" name="recent_label">
-        <property name="text">
-         <string>Recent Files:</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QComboBox" name="recent_files_combo"/>
       </item>
       <item>
        <widget class="QLabel" name="mode_label">
@@ -176,6 +194,11 @@
          <widget class="QComboBox" name="method_combo">
           <item>
            <property name="text">
+            <string>none</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
             <string>savgol</string>
            </property>
           </item>
@@ -202,11 +225,6 @@
           <item>
            <property name="text">
             <string>wiener</string>
-           </property>
-          </item>
-          <item>
-           <property name="text">
-            <string>none</string>
            </property>
           </item>
          </widget>
