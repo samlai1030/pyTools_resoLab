@@ -127,7 +127,7 @@ class Ui_MainWindow(object):
         self.right_layout.setContentsMargins(0, 0, 0, 0)
         self.right_layout.setObjectName("right_layout")
         self.sfr_result_group_box = QtWidgets.QGroupBox(self.right_panel)
-        self.sfr_result_group_box.setMaximumSize(QtCore.QSize(16777215, 100))
+        self.sfr_result_group_box.setMaximumSize(QtCore.QSize(1000, 100))
         self.sfr_result_group_box.setObjectName("sfr_result_group_box")
         self.sfr_result_layout = QtWidgets.QHBoxLayout(self.sfr_result_group_box)
         self.sfr_result_layout.setObjectName("sfr_result_layout")
