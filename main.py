@@ -983,14 +983,21 @@ class MainWindow(QMainWindow):
         canvas_layout.setContentsMargins(0, 0, 0, 0)
         canvas_layout.addWidget(self.canvas)
 
-        self.ax_sfr = self.figure.add_subplot(211)
-        self.ax_esf = self.figure.add_subplot(223)
-        self.ax_lsf = self.figure.add_subplot(224)
+        # 2x2 subplot layout:
+        # (0,0) = SFR/MTF  |  (0,1) = ROI Image
+        # (1,0) = ESF      |  (1,1) = LSF
+        self.ax_sfr = self.figure.add_subplot(2, 2, 1)  # Top-left
+        self.ax_roi = self.figure.add_subplot(2, 2, 2)  # Top-right (ROI image)
+        self.ax_esf = self.figure.add_subplot(2, 2, 3)  # Bottom-left
+        self.ax_lsf = self.figure.add_subplot(2, 2, 4)  # Bottom-right
 
         self.ax_sfr.set_title("SFR / MTF Result", fontsize=11, fontweight="bold")
         self.ax_sfr.set_xlabel("Frequency (cycles/pixel)", fontsize=10)
         self.ax_sfr.set_ylabel("MTF", fontsize=10)
         self.ax_sfr.grid(True, alpha=0.3)
+
+        self.ax_roi.set_title("ROI Image", fontsize=10, fontweight="bold")
+        self.ax_roi.axis('off')  # Hide axes for image display
 
         self.ax_esf.set_title(
             "ESF (Edge Spread Function)", fontsize=10, fontweight="bold"
@@ -1630,7 +1637,7 @@ class MainWindow(QMainWindow):
 
                 # 6. Show Result
                 if freqs is not None:
-                    sfr_at_ny4 = self.plot_sfr(freqs, sfr_values, esf, lsf, edge_type)
+                    sfr_at_ny4 = self.plot_sfr(freqs, sfr_values, esf, lsf, edge_type, roi_image=roi)
 
                     # Display SFR value at top-right corner of ROI
                     self.image_label.set_roi_sfr_display(sfr_at_ny4, x, y, w, h)
@@ -1703,7 +1710,7 @@ class MainWindow(QMainWindow):
             stability = np.mean(sfr_std)
 
             # Display results
-            self.plot_sfr(freqs, sfr_averaged, esf_averaged, lsf_averaged, edge_type)
+            self.plot_sfr(freqs, sfr_averaged, esf_averaged, lsf_averaged, edge_type, roi_image=roi)
 
             # Get SFR value at ny/4 for display (same calculation as in plot_sfr)
             ny_frequency = 0.5  # Default Nyquist
@@ -1785,9 +1792,9 @@ class MainWindow(QMainWindow):
             "border: 1px solid #999; background: #E6F3FF; padding: 8px; font-weight: bold; font-size: 12px; text-align: center; color: #003366;"
         )
 
-    def plot_sfr(self, frequencies, sfr_values, esf, lsf, edge_type="V-Edge"):
+    def plot_sfr(self, frequencies, sfr_values, esf, lsf, edge_type="V-Edge", roi_image=None):
         """
-        Plot ESF, LSF, and SFR/MTF in three subplots
+        Plot ESF, LSF, SFR/MTF and ROI image in four subplots (2x2 layout)
 
         Parameters:
         - frequencies: Frequency array for SFR plot (already compensated for supersampling)
@@ -1795,6 +1802,7 @@ class MainWindow(QMainWindow):
         - esf: Edge Spread Function (4x oversampled)
         - lsf: Line Spread Function
         - edge_type: "V-Edge" or "H-Edge"
+        - roi_image: ROI image array to display (optional)
         """
         # Supersampling factor used in ISO 12233:2023
         SUPERSAMPLING_FACTOR = 4
@@ -1803,6 +1811,15 @@ class MainWindow(QMainWindow):
         self.ax_esf.clear()
         self.ax_lsf.clear()
         self.ax_sfr.clear()
+        self.ax_roi.clear()
+
+        # Plot ROI Image (top-right)
+        if roi_image is not None:
+            self.ax_roi.imshow(roi_image, cmap='gray', aspect='equal')
+            self.ax_roi.set_title(f"ROI Image ({roi_image.shape[1]}×{roi_image.shape[0]})", fontsize=10, fontweight="bold")
+        else:
+            self.ax_roi.set_title("ROI Image", fontsize=10, fontweight="bold")
+        self.ax_roi.axis('off')
 
         # Plot 1: ESF (Edge Spread Function)
         # Note: ESF is 4x oversampled, so we need to account for that in x-axis
