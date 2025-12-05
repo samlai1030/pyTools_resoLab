@@ -983,7 +983,7 @@ class MainWindow(QMainWindow):
 
 
     def init_plots(self):
-        self.figure = Figure(figsize=(12, 9), dpi=100)
+        self.figure = Figure(dpi=100)
         self.figure.patch.set_facecolor("white")
         self.canvas = FigureCanvas(self.figure)
 
