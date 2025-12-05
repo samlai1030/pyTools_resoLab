@@ -80,7 +80,7 @@ cd pyTools_ResoLab
 pip install -r requirements.txt
 
 # Run the application
-python SFR_app_v2.py
+python main.py
 ```
 
 ## 🚀 Usage
@@ -208,7 +208,7 @@ All core features have been tested and verified:
 
 ```
 pyTools_ResoLab/
-├── SFR_app_v2.py              # Main application (1561 lines)
+├── main.py              # Main application (1561 lines)
 ├── requirements.txt           # Python dependencies
 ├── setup.py                   # Package configuration
 ├── .gitignore                 # Git rules
