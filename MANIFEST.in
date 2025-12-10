@@ -1,0 +1,13 @@
+include LICENSE
+include README.md
+include requirements.txt
+include mainUI.ui
+include pyTools_ResoLab.spec
+recursive-exclude __pycache__ *
+recursive-exclude build *
+recursive-exclude dist *
+recursive-exclude .git *
+recursive-exclude .idea *
+exclude .DS_Store
+exclude recent_files.json
+

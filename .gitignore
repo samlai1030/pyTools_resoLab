@@ -29,7 +29,8 @@ MANIFEST
 
 # PyInstaller
 *.manifest
-*.spec
+# Keep *.spec for pyinstaller config
+!pyTools_ResoLab.spec
 
 # Unit test / coverage reports
 htmlcov/

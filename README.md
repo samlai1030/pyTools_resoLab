@@ -99,6 +99,20 @@ pillow>=10.0.0
 
 ## 📦 Installation
 
+### Option 1: Install from PyPI (Recommended)
+
+```bash
+pip install pyTools-ResoLab
+```
+
+### Option 2: Install from GitHub
+
+```bash
+pip install git+https://github.com/samlai1030/pyTools_ResoLab.git
+```
+
+### Option 3: Clone and Install
+
 ```bash
 # Clone the repository
 git clone https://github.com/samlai1030/pyTools_ResoLab.git
@@ -110,6 +124,10 @@ pip install -r requirements.txt
 # Run the application
 python main.py
 ```
+
+### Option 4: Download macOS App
+
+Download the pre-built `.dmg` from [Releases](https://github.com/samlai1030/pyTools_ResoLab/releases)
 
 ---
 
