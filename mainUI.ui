@@ -24,20 +24,32 @@
        <layout class="QVBoxLayout" name="left_layout">
         <item>
          <widget class="QGroupBox" name="file_group_box">
+          <property name="font">
+           <font>
+            <weight>75</weight>
+            <bold>true</bold>
+           </font>
+          </property>
           <property name="title">
            <string>File</string>
           </property>
           <layout class="QHBoxLayout" name="file_layout">
            <item>
             <widget class="QPushButton" name="btn_load">
-             <property name="text">
-              <string>Load .raw</string>
-             </property>
              <property name="minimumSize">
               <size>
                <width>100</width>
                <height>30</height>
               </size>
+             </property>
+             <property name="font">
+              <font>
+               <weight>50</weight>
+               <bold>false</bold>
+              </font>
+             </property>
+             <property name="text">
+              <string>Load .raw</string>
              </property>
             </widget>
            </item>
@@ -49,6 +61,12 @@
                <height>30</height>
               </size>
              </property>
+             <property name="font">
+              <font>
+               <weight>50</weight>
+               <bold>false</bold>
+              </font>
+             </property>
              <property name="toolTip">
               <string>Recent Files</string>
              </property>
@@ -59,12 +77,24 @@
         </item>
         <item>
          <widget class="QGroupBox" name="selection_mode_group_box">
+          <property name="font">
+           <font>
+            <weight>75</weight>
+            <bold>true</bold>
+           </font>
+          </property>
           <property name="title">
            <string>Selection Mode</string>
           </property>
           <layout class="QHBoxLayout" name="selection_mode_layout">
            <item>
             <widget class="QRadioButton" name="radio_drag">
+             <property name="font">
+              <font>
+               <weight>50</weight>
+               <bold>false</bold>
+              </font>
+             </property>
              <property name="text">
               <string>Drag Select</string>
              </property>
@@ -75,6 +105,12 @@
            </item>
            <item>
             <widget class="QRadioButton" name="radio_click">
+             <property name="font">
+              <font>
+               <weight>50</weight>
+               <bold>false</bold>
+              </font>
+             </property>
              <property name="text">
               <string>Click</string>
              </property>
@@ -82,6 +118,12 @@
            </item>
            <item>
             <widget class="QLabel" name="size_label">
+             <property name="font">
+              <font>
+               <weight>50</weight>
+               <bold>false</bold>
+              </font>
+             </property>
              <property name="text">
               <string>Size:</string>
              </property>
@@ -100,6 +142,12 @@
                <width>50</width>
                <height>16777215</height>
               </size>
+             </property>
+             <property name="font">
+              <font>
+               <weight>50</weight>
+               <bold>false</bold>
+              </font>
              </property>
              <property name="minimum">
               <number>10</number>
@@ -132,6 +180,12 @@
          <layout class="QHBoxLayout" name="view_mode_layout">
           <item>
            <widget class="QPushButton" name="btn_sfr_mode">
+            <property name="font">
+             <font>
+              <weight>75</weight>
+              <bold>true</bold>
+             </font>
+            </property>
             <property name="text">
              <string>📊 SFR</string>
             </property>
@@ -145,6 +199,12 @@
           </item>
           <item>
            <widget class="QPushButton" name="btn_view_mode">
+            <property name="font">
+             <font>
+              <weight>75</weight>
+              <bold>true</bold>
+             </font>
+            </property>
             <property name="text">
              <string>🖐 VIEW</string>
             </property>
@@ -157,6 +217,12 @@
         </item>
         <item>
          <widget class="QGroupBox" name="image_view_group_box">
+          <property name="font">
+           <font>
+            <weight>75</weight>
+            <bold>true</bold>
+           </font>
+          </property>
           <property name="title">
            <string>Image View</string>
           </property>
@@ -171,8 +237,8 @@
                <rect>
                 <x>0</x>
                 <y>0</y>
-                <width>786</width>
-                <height>499</height>
+                <width>798</width>
+                <height>518</height>
                </rect>
               </property>
               <layout class="QVBoxLayout" name="verticalLayout_2">
@@ -224,6 +290,12 @@
           </item>
           <item>
            <widget class="QLabel" name="edge_threshold_value_label">
+            <property name="font">
+             <font>
+              <weight>75</weight>
+              <bold>true</bold>
+             </font>
+            </property>
             <property name="text">
              <string>50</string>
             </property>
@@ -251,20 +323,32 @@
        <layout class="QVBoxLayout" name="right_layout">
         <item>
          <widget class="QGroupBox" name="sfr_result_group_box">
-          <property name="title">
-           <string>SFR Result</string>
-          </property>
           <property name="maximumSize">
            <size>
-            <width>1000</width>
+            <width>500000</width>
             <height>100</height>
            </size>
+          </property>
+          <property name="font">
+           <font>
+            <weight>75</weight>
+            <bold>true</bold>
+           </font>
+          </property>
+          <property name="title">
+           <string>SFR Result</string>
           </property>
           <layout class="QHBoxLayout" name="sfr_result_layout">
            <item>
             <widget class="QLabel" name="method_label">
+             <property name="font">
+              <font>
+               <weight>50</weight>
+               <bold>false</bold>
+              </font>
+             </property>
              <property name="text">
-              <string>LSF:</string>
+              <string>LSF Filter:</string>
              </property>
             </widget>
            </item>
@@ -275,6 +359,12 @@
                <width>100</width>
                <height>16777215</height>
               </size>
+             </property>
+             <property name="font">
+              <font>
+               <weight>50</weight>
+               <bold>false</bold>
+              </font>
              </property>
              <item>
               <property name="text">
@@ -315,13 +405,31 @@
            </item>
            <item>
             <widget class="QCheckBox" name="stabilize_checkbox">
+             <property name="font">
+              <font>
+               <weight>50</weight>
+               <bold>false</bold>
+              </font>
+             </property>
              <property name="text">
-              <string>Stabilize</string>
+              <string> SFR Stabilize ||</string>
              </property>
             </widget>
            </item>
            <item>
             <widget class="QLabel" name="info_label">
+             <property name="maximumSize">
+              <size>
+               <width>500</width>
+               <height>16777215</height>
+              </size>
+             </property>
+             <property name="font">
+              <font>
+               <weight>50</weight>
+               <bold>false</bold>
+              </font>
+             </property>
              <property name="text">
               <string>Status: Ready</string>
              </property>
@@ -344,22 +452,41 @@
          </widget>
         </item>
         <item>
-         <widget class="QWidget" name="canvas_placeholder" native="true"/>
+         <widget class="QWidget" name="canvas_placeholder" native="true">
+          <property name="font">
+           <font>
+            <weight>50</weight>
+            <bold>false</bold>
+           </font>
+          </property>
+         </widget>
         </item>
         <item>
          <widget class="QGroupBox" name="nyquist_group_box">
-          <property name="title">
-           <string>Nyquist</string>
-          </property>
           <property name="maximumSize">
            <size>
             <width>16777215</width>
             <height>100</height>
            </size>
           </property>
+          <property name="font">
+           <font>
+            <weight>75</weight>
+            <bold>true</bold>
+           </font>
+          </property>
+          <property name="title">
+           <string>Nyquist</string>
+          </property>
           <layout class="QHBoxLayout" name="ny_layout">
            <item>
             <widget class="QLabel" name="ny_label">
+             <property name="font">
+              <font>
+               <weight>50</weight>
+               <bold>false</bold>
+              </font>
+             </property>
              <property name="text">
               <string>Nyquist :</string>
              </property>
@@ -395,14 +522,20 @@
            </item>
            <item>
             <widget class="QLabel" name="ny_freq_value_label">
-             <property name="text">
-              <string>0.50</string>
-             </property>
              <property name="minimumSize">
               <size>
                <width>40</width>
                <height>0</height>
               </size>
+             </property>
+             <property name="font">
+              <font>
+               <weight>75</weight>
+               <bold>true</bold>
+              </font>
+             </property>
+             <property name="text">
+              <string>0.50</string>
              </property>
             </widget>
            </item>
@@ -434,7 +567,7 @@
      <x>0</x>
      <y>0</y>
      <width>1600</width>
-     <height>22</height>
+     <height>33</height>
     </rect>
    </property>
   </widget>
@@ -443,4 +576,3 @@
  <resources/>
  <connections/>
 </ui>
-

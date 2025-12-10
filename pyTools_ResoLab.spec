@@ -2,11 +2,17 @@
 import sys
 sys.setrecursionlimit(sys.getrecursionlimit() * 5)
 
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+
+# Collect data files for jaraco.text and cv2
+jaraco_datas = collect_data_files('jaraco.text')
+cv2_datas = collect_data_files('cv2')
+
 a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[('mainUI.ui', '.')],
+    datas=[('mainUI.ui', '.')] + jaraco_datas + cv2_datas,
     hiddenimports=[
         'PyQt5.sip',
         'PyQt5.QtCore',
@@ -20,7 +26,10 @@ a = Analysis(
         'cv2',
         'matplotlib',
         'matplotlib.backends.backend_qt5agg',
-    ],
+        'jaraco.text',
+        'jaraco.functools',
+        'jaraco.context',
+    ] + collect_submodules('cv2'),
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
