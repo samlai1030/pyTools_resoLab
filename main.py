@@ -352,6 +352,108 @@ class SFRCalculator:
         return True, "Edge Detected", edge_type, confidence
 
     @staticmethod
+    def standardize_roi_orientation(roi_image):
+        """
+        Standardize ROI orientation for SFR calculation.
+        Ensures the edge is vertical with:
+        1. Dark side on left, bright side on right
+        2. Dark side (black) width increases toward bottom (slant direction)
+
+        This standardization improves SFR measurement consistency by:
+        1. Rotating horizontal edges (H-Edge) to vertical (V-Edge)
+        2. Flipping horizontally if left side is brighter than right side
+        3. Flipping vertically to ensure dark side width is larger at bottom
+
+        Parameters:
+        - roi_image: Input ROI image (numpy array)
+
+        Returns:
+        - standardized_roi: ROI with standardized orientation
+        - edge_type: Detected edge type after standardization ("V-Edge" or original)
+        - confidence: Edge detection confidence
+        """
+        if roi_image is None or roi_image.size == 0:
+            return roi_image, None, 0.0
+
+        img = roi_image.copy()
+
+        # Helper function to get grayscale for analysis
+        def get_gray(image):
+            if image.ndim == 3 and image.shape[2] >= 3:
+                return cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            elif image.ndim == 3:
+                return np.mean(image, axis=2).astype(image.dtype)
+            else:
+                return image
+
+        gray_for_analysis = get_gray(img)
+
+        # Step 1: Detect current edge orientation
+        edge_type, confidence, details = SFRCalculator.detect_edge_orientation(gray_for_analysis)
+
+        # Step 2: If horizontal edge, rotate 90 degrees counter-clockwise to make it vertical
+        if edge_type == "H-Edge":
+            # Rotate image 90 degrees counter-clockwise
+            img = np.rot90(img, k=1)
+            gray_for_analysis = get_gray(img)
+
+            # Re-detect orientation after rotation (should now be V-Edge)
+            edge_type, confidence, details = SFRCalculator.detect_edge_orientation(gray_for_analysis)
+
+        # Step 3: Ensure dark side is on left, bright side is on right
+        h, w = gray_for_analysis.shape[:2]
+        left_half_width = max(1, w // 2)
+
+        left_mean = np.mean(gray_for_analysis[:, :left_half_width])
+        right_mean = np.mean(gray_for_analysis[:, left_half_width:])
+
+        # If left side is brighter than right side, flip horizontally
+        if left_mean > right_mean:
+            img = np.fliplr(img)
+            gray_for_analysis = get_gray(img)
+
+        # Step 4: Ensure dark side (black) width is larger at bottom than top
+        # This standardizes the slant direction of the edge
+        # Compare the edge position (transition point) between top and bottom rows
+        h, w = gray_for_analysis.shape[:2]
+
+        # Get top and bottom portions of the image
+        top_portion_height = max(1, h // 4)
+        bottom_portion_height = max(1, h // 4)
+
+        top_rows = gray_for_analysis[:top_portion_height, :]
+        bottom_rows = gray_for_analysis[-bottom_portion_height:, :]
+
+        # Find edge position (where intensity crosses 50%) for top and bottom
+        # Average each portion vertically to get a 1D profile
+        top_profile = np.mean(top_rows, axis=0)
+        bottom_profile = np.mean(bottom_rows, axis=0)
+
+        # Normalize profiles
+        def find_edge_position(profile):
+            p_min, p_max = np.min(profile), np.max(profile)
+            if p_max - p_min < 1e-6:
+                return len(profile) // 2
+            p_norm = (profile - p_min) / (p_max - p_min)
+            # Find the position closest to 0.5 (edge center)
+            return np.argmin(np.abs(p_norm - 0.5))
+
+        top_edge_pos = find_edge_position(top_profile)
+        bottom_edge_pos = find_edge_position(bottom_profile)
+
+        # Dark side is on left. If dark side width at bottom < dark side width at top,
+        # the edge position at bottom is less than at top, meaning we need to flip vertically
+        # We want: bottom_edge_pos > top_edge_pos (dark region wider at bottom)
+        if bottom_edge_pos < top_edge_pos:
+            img = np.flipud(img)
+            gray_for_analysis = get_gray(img)
+
+        # Final edge detection for confidence
+        edge_type, confidence, details = SFRCalculator.detect_edge_orientation(gray_for_analysis)
+
+        return img, edge_type, confidence
+
+    @staticmethod
     def calculate_sfr(
         roi_image,
         edge_type="V-Edge",
@@ -579,6 +681,7 @@ class ImageLabel(QLabel):
         self.selection_rect = None  # Store selected 40x40 rectangle
         self.roi_sfr_value = None  # Store SFR value to display at ROI corner
         self.roi_position = None  # Store ROI (x, y, w, h) for SFR display
+        self.roi_markers = []  # List of ROI markers [(x, y, w, h, name), ...]
         self._updating_zoom = False  # Guard flag to prevent recursion
         # Panning support for VIEW mode
         self.is_panning = False
@@ -617,6 +720,58 @@ class ImageLabel(QLabel):
                     self.pan_scroll_start_h = self.scroll_area.horizontalScrollBar().value()
                     self.pan_scroll_start_v = self.scroll_area.verticalScrollBar().value()
                 self.setCursor(Qt.ClosedHandCursor)
+            return
+
+        # Check if ROI Manual Mode is active - places multiple ROI markers (position picking only, no SFR calc)
+        if self.parent_window and hasattr(self.parent_window, "roi_manual_mode") and self.parent_window.roi_manual_mode:
+            if event.button() == Qt.LeftButton:
+                click_pos = event.pos()
+
+                # Get size from parent window (same as click select size)
+                size = 40
+                if self.parent_window and hasattr(self.parent_window, "click_select_size"):
+                    size = self.parent_window.click_select_size
+
+                half_size = size // 2
+
+                # Calculate region centered at click point
+                center_x = int(click_pos.x() / self.zoom_level)
+                center_y = int(click_pos.y() / self.zoom_level)
+
+                x = max(0, center_x - half_size)
+                y = max(0, center_y - half_size)
+                w = size
+                h = size
+
+                # Ensure within image bounds
+                if x + w > self.image_w:
+                    x = max(0, self.image_w - size)
+                if y + h > self.image_h:
+                    y = max(0, self.image_h - size)
+
+                # ROI Plan Mode: Just store position, no SFR calculation
+                # SFR will be calculated when user applies the saved config
+                roi_num = len(self.roi_markers) + 1
+                roi_name = f"ROI_{roi_num}"
+                # Store with None for sfr_value - will be calculated on apply
+                self.roi_markers.append((x, y, w, h, roi_name, None))
+
+                # Also update parent's roi_markers list
+                if self.parent_window and hasattr(self.parent_window, "roi_markers"):
+                    self.parent_window.roi_markers.append((x, y, w, h, roi_name, None))
+                    # Enable ROI Save button since we now have markers
+                    if hasattr(self.parent_window, "ui"):
+                        self.parent_window.ui.btn_roi_map_save.setEnabled(True)
+
+                # Update display
+                self.update()
+
+                # Show info - position only, no SFR in plan mode
+                if self.parent_window:
+                    total = len(self.roi_markers)
+                    self.parent_window.ui.info_label.setText(
+                        f"📍 {roi_name} placed at ({x},{y}) {w}×{h} | Total: {total} ROI(s) - Click to add more"
+                    )
             return
 
         # SFR mode: Get current selection mode from parent window
@@ -823,6 +978,57 @@ class ImageLabel(QLabel):
             painter.setPen(QColor(255, 255, 255))
             painter.drawText(text_x, text_y - 3, sfr_text)
 
+        # Draw ROI markers (for ROI Manual mode and loaded ROIs)
+        if self.roi_markers:
+            from PyQt5.QtGui import QFont
+            font = QFont("Arial", 10)
+            font.setBold(True)
+            painter.setFont(font)
+
+            for marker in self.roi_markers:
+                # Handle both 5-tuple (x, y, w, h, name) and 6-tuple (x, y, w, h, name, sfr_value)
+                if len(marker) >= 6:
+                    rx, ry, rw, rh, roi_name, sfr_value = marker[:6]
+                else:
+                    rx, ry, rw, rh, roi_name = marker[:5]
+                    sfr_value = None
+
+                # Convert to display coordinates with zoom
+                disp_x = int(rx * self.zoom_level)
+                disp_y = int(ry * self.zoom_level)
+                disp_w = int(rw * self.zoom_level)
+                disp_h = int(rh * self.zoom_level)
+
+                # Draw ROI rectangle (red color)
+                pen = QPen(QColor(255, 0, 0))  # Red
+                pen.setWidth(2)
+                painter.setPen(pen)
+                painter.drawRect(disp_x, disp_y, disp_w, disp_h)
+
+                # Prepare label text (name + SFR value if available)
+                if sfr_value is not None:
+                    label_text = f"{roi_name}: {sfr_value*100:.1f}%"
+                else:
+                    label_text = roi_name
+
+                # Draw label on top of the rectangle
+                metrics = painter.fontMetrics()
+                text_width = metrics.horizontalAdvance(label_text)
+                text_height = metrics.height()
+
+                # Position text at top of ROI rectangle (inside, at top-left)
+                text_x = disp_x + 3
+                text_y = disp_y + text_height + 2
+
+                # Draw semi-transparent background for label
+                bg_rect = QRect(text_x - 2, disp_y + 2,
+                               text_width + 4, text_height + 2)
+                painter.fillRect(bg_rect, QColor(255, 0, 0, 200))  # Red background
+
+                # Draw text (white)
+                painter.setPen(QColor(255, 255, 255))
+                painter.drawText(text_x, text_y, label_text)
+
         # End painter properly
         painter.end()
 
@@ -916,6 +1122,8 @@ class MainWindow(QMainWindow):
         # Data
         self.raw_data = None
         self.display_data = None  # Store display data for edge overlay
+        self.current_image_path = None  # Track current loaded image file path
+        self.current_roi_data = None  # Store current ROI selection data for saving
         self.image_w = 640  # 預設，實際應由使用者輸入
         self.image_h = 640
 
@@ -933,6 +1141,11 @@ class MainWindow(QMainWindow):
 
         # View mode: "sfr" for SFR analysis or "view" for panning
         self.view_mode = "sfr"  # Default: SFR mode
+
+        # ROI plan mode: when enabled, SFR calculation is stopped (only ROI selection)
+        self.roi_plan_mode = False  # Default: disabled
+        self.roi_manual_mode = False  # ROI Manual mode for placing multiple ROIs
+        self.roi_markers = []  # List of ROI markers [(x, y, w, h, name), ...]
 
         # Edge detection threshold (adjustable via slider)
         self.edge_threshold = 50  # Default: 50
@@ -952,7 +1165,13 @@ class MainWindow(QMainWindow):
         self.recent_files = []
         self.max_recent_files = 10
 
+        # Recent ROI files list (max 10 ROI files)
+        self.recent_roi_files = []
+        self.max_recent_roi_files = 10
+        self.RECENT_ROI_FILES_PATH = "recent_roi_files.json"
+
         self.load_recent_files()
+        self.load_recent_roi_files()
         self.init_ui_connections()
         self.init_plots()
         self.update_recent_files_list()
@@ -962,7 +1181,9 @@ class MainWindow(QMainWindow):
         self.ui.recent_files_combo.activated.connect(self.on_recent_file_selected)
         self.ui.radio_drag.toggled.connect(self.on_selection_mode_changed)
         self.ui.radio_click.toggled.connect(self.on_selection_mode_changed)
+        self.ui.radio_script_roi.toggled.connect(self.on_selection_mode_changed)
         self.ui.click_size_input.valueChanged.connect(self.on_click_size_changed)
+        self.ui.recent_roi_combo.activated.connect(self.on_recent_roi_selected)
         self.ui.btn_sfr_mode.clicked.connect(self.on_sfr_mode_clicked)
         self.ui.btn_view_mode.clicked.connect(self.on_view_mode_clicked)
         self.ui.method_combo.currentTextChanged.connect(self.on_smoothing_method_changed)
@@ -973,6 +1194,14 @@ class MainWindow(QMainWindow):
         self.ui.btn_erase_edge.clicked.connect(self.on_erase_edge)
         self.ui.ny_freq_slider.valueChanged.connect(self.on_ny_freq_slider_changed)
 
+        # ROI Setting connections
+        self.ui.checkBox.stateChanged.connect(self.on_roi_plan_mode_changed)
+        self.ui.btn_roi_detact.clicked.connect(self.on_roi_detect)
+        self.ui.btn_roi_manual.clicked.connect(self.on_roi_manual)
+        self.ui.btn_roi_map_load.clicked.connect(self.on_roi_map_load)
+        self.ui.btn_roi_map_apply.clicked.connect(self.on_roi_map_apply)
+        self.ui.btn_roi_map_save.clicked.connect(self.on_roi_save)
+
         # Store current Ny frequency value (0.1 to 1.0, slider is 10-100)
         self.ny_frequency = 0.5
 
@@ -980,6 +1209,22 @@ class MainWindow(QMainWindow):
         self.ui.scroll_area.setWidget(self.image_label)
         self.image_label.roi_callback = self.process_roi
         self.image_label.scroll_area = self.ui.scroll_area
+
+        # Initialize recent ROI combo
+        self.update_recent_roi_list()
+
+        # Initially disable ROI Detect and ROI Manual buttons
+        self.ui.btn_roi_detact.setEnabled(False)
+        self.ui.btn_roi_manual.setEnabled(False)
+        # Initially disable ROI Save button (enable when ROI markers exist)
+        self.ui.btn_roi_map_save.setEnabled(False)
+        # Initially disable recent ROI combo (only active when ROI map radio is selected)
+        self.ui.recent_roi_combo.setEnabled(False)
+        # Initially disable ROI Apply button (enable when .roi file is loaded)
+        self.ui.btn_roi_map_apply.setEnabled(False)
+
+        # Track loaded ROI file path
+        self.loaded_roi_file_path = None
 
 
     def init_plots(self):
@@ -1056,6 +1301,535 @@ class MainWindow(QMainWindow):
         except Exception as e:
             print(f"Failed to save recent files: {e}")
 
+    # ==================== ROI File Management ====================
+
+    def get_roi_file_path(self, image_path=None):
+        """
+        Get the ROI file path for the given or current image.
+        ROI file uses same basename as image with .roi extension.
+
+        Parameters:
+        - image_path: Path to image file (uses current_image_path if None)
+
+        Returns:
+        - str: Path to .roi file, or None if no image loaded
+        """
+        if image_path is None:
+            image_path = self.current_image_path
+        if image_path is None:
+            return None
+
+        # Replace extension with .roi
+        base_path = os.path.splitext(image_path)[0]
+        return f"{base_path}.roi"
+
+    def save_roi_file(self, roi_x, roi_y, roi_w, roi_h, edge_type="Unknown", confidence=0.0):
+        """
+        Save current ROI configuration to a .roi JSON file.
+
+        Parameters:
+        - roi_x, roi_y: Top-left corner of ROI
+        - roi_w, roi_h: Width and height of ROI
+        - edge_type: Detected edge type ("V-Edge", "H-Edge", "Mixed")
+        - confidence: Edge detection confidence (0-100)
+
+        Returns:
+        - str: Path to saved .roi file, or None on failure
+        """
+        if self.current_image_path is None:
+            self.ui.info_label.setText("⚠️ No image loaded - cannot save ROI")
+            return None
+
+        roi_file_path = self.get_roi_file_path()
+        if roi_file_path is None:
+            return None
+
+        from datetime import datetime
+
+        roi_data = {
+            "version": "1.0",
+            "source_image": os.path.basename(self.current_image_path),
+            "source_image_full_path": self.current_image_path,
+            "timestamp": datetime.now().isoformat(),
+            "image_dimensions": {
+                "width": self.image_w,
+                "height": self.image_h
+            },
+            "roi": {
+                "x": roi_x,
+                "y": roi_y,
+                "w": roi_w,
+                "h": roi_h
+            },
+            "edge_type": edge_type,
+            "edge_threshold": self.edge_threshold,
+            "confidence": confidence
+        }
+
+        try:
+            with open(roi_file_path, "w") as f:
+                json.dump(roi_data, f, indent=2)
+
+            # Store current ROI data for reference
+            self.current_roi_data = roi_data
+
+            # Add to recent ROI files list
+            self.add_to_recent_roi_files(roi_file_path)
+
+            self.ui.info_label.setText(f"💾 ROI saved: {os.path.basename(roi_file_path)}")
+            return roi_file_path
+
+        except Exception as e:
+            self.ui.info_label.setText(f"❌ Failed to save ROI: {e}")
+            print(f"Failed to save ROI file: {e}")
+            return None
+
+    def load_roi_file(self, roi_file_path=None):
+        """
+        Load ROI configuration from a .roi JSON file.
+
+        Parameters:
+        - roi_file_path: Path to .roi file (auto-detect from current image if None)
+
+        Returns:
+        - dict: ROI data dictionary, or None on failure
+        """
+        # Auto-detect ROI file path if not provided
+        if roi_file_path is None:
+            roi_file_path = self.get_roi_file_path()
+
+        if roi_file_path is None or not os.path.exists(roi_file_path):
+            self.ui.info_label.setText("⚠️ No ROI file found for current image")
+            return None
+
+        try:
+            with open(roi_file_path, "r") as f:
+                roi_data = json.load(f)
+
+            # Validate version
+            version = roi_data.get("version", "unknown")
+            if version != "1.0":
+                print(f"Warning: ROI file version {version} may not be fully compatible")
+
+            # Store loaded ROI data
+            self.current_roi_data = roi_data
+
+            self.ui.info_label.setText(f"📂 ROI loaded: {os.path.basename(roi_file_path)}")
+            return roi_data
+
+        except json.JSONDecodeError as e:
+            self.ui.info_label.setText(f"❌ Invalid ROI file format: {e}")
+            return None
+        except Exception as e:
+            self.ui.info_label.setText(f"❌ Failed to load ROI: {e}")
+            print(f"Failed to load ROI file: {e}")
+            return None
+
+    def apply_roi_from_file(self, roi_file_path=None):
+        """
+        Load ROI file and apply it - shows ROI markers with SFR values on image.
+        Does NOT update SFR plot when loading multiple ROIs.
+
+        Parameters:
+        - roi_file_path: Path to .roi file (auto-detect from current image if None)
+
+        Returns:
+        - bool: True if ROI was applied successfully
+        """
+        roi_data = self.load_roi_file(roi_file_path)
+        if roi_data is None:
+            return False
+
+        # Check if this is a multi-ROI config file (has "rois" array) or single ROI file
+        if "rois" in roi_data:
+            # Multi-ROI config format - apply positions and calculate SFR for current image
+            rois = roi_data.get("rois", [])
+            if not rois:
+                self.ui.info_label.setText("⚠️ No ROIs found in config file")
+                return False
+
+            # Clear existing markers first
+            self.roi_markers = []
+            self.image_label.roi_markers = []
+
+            valid_count = 0
+            # Apply ROI positions and calculate SFR for each on current image
+            for roi_item in rois:
+                x = roi_item.get("x", 0)
+                y = roi_item.get("y", 0)
+                w = roi_item.get("w", 40)
+                h = roi_item.get("h", 40)
+                name = roi_item.get("name", f"ROI_{len(self.roi_markers) + 1}")
+
+                # Validate ROI is within image bounds
+                if x + w > self.image_w or y + h > self.image_h:
+                    continue
+
+                # Calculate SFR value for this ROI on current image
+                roi_image = self.raw_data[y:y+h, x:x+w]
+                sfr_value = self.calculate_sfr_value_only(roi_image)
+
+                # Add to markers list with calculated SFR value
+                self.roi_markers.append((x, y, w, h, name, sfr_value))
+                self.image_label.roi_markers.append((x, y, w, h, name, sfr_value))
+                valid_count += 1
+
+            # Enable ROI Save button (can save with new SFR values)
+            self.ui.btn_roi_map_save.setEnabled(True)
+
+            # Update image display
+            self.image_label.update()
+
+            self.ui.info_label.setText(
+                f"📂 Applied {valid_count} ROI(s) from config - SFR values calculated for current image"
+            )
+            return True
+        else:
+            # Single ROI file format (legacy)
+            roi = roi_data.get("roi", {})
+            x = roi.get("x", 0)
+            y = roi.get("y", 0)
+            w = roi.get("w", 40)
+            h = roi.get("h", 40)
+
+            # Validate ROI is within current image bounds
+            if x + w > self.image_w or y + h > self.image_h:
+                self.ui.info_label.setText("⚠️ ROI coordinates exceed current image dimensions")
+                return False
+
+            # Create QRect and trigger ROI processing
+            from PyQt5.QtCore import QRect
+            rect = QRect(x, y, w, h)
+
+            # Update selection display on image
+            self.image_label.selection_rect = rect
+            self.image_label.update()
+
+            # Process the ROI
+            self.process_roi(rect)
+
+            edge_type = roi_data.get("edge_type", "Unknown")
+            confidence = roi_data.get("confidence", 0)
+            self.ui.info_label.setText(
+                f"📂 Applied ROI from file: ({x},{y}) {w}×{h} | {edge_type} (Conf: {confidence:.1f}%)"
+            )
+            return True
+
+    def calculate_sfr_value_only(self, roi_image):
+        """
+        Calculate SFR value at Ny/4 for a ROI without updating plot.
+        Used for displaying SFR values on multiple ROI markers.
+
+        Returns:
+        - float: SFR value at Ny/4, or None if calculation fails
+        """
+        try:
+            # Standardize ROI orientation (vertical edge, dark side left, bright side right)
+            std_roi, std_edge_type, std_conf = SFRCalculator.standardize_roi_orientation(roi_image)
+
+            # Validate edge on standardized ROI
+            is_edge, msg, edge_type, confidence = SFRCalculator.validate_edge(
+                std_roi, threshold=self.edge_threshold
+            )
+            if not is_edge:
+                return None
+
+            # Use standardized edge type if available
+            used_edge_type = std_edge_type if std_edge_type is not None else edge_type
+
+            # Calculate SFR on standardized ROI
+            result = SFRCalculator.calculate_sfr(
+                std_roi,
+                edge_type=used_edge_type,
+                compensate_bias=True,
+                compensate_noise=True,
+                lsf_smoothing_method=self.lsf_smoothing_method,
+            )
+            freqs, sfr_values, esf, lsf = result
+
+            if freqs is None:
+                return None
+
+            # Get SFR value at ny/4
+            ny_frequency = getattr(self, 'ny_frequency', 0.5)
+            ny_4 = ny_frequency / 4
+            frequencies_compensated = freqs * 4
+
+            if len(frequencies_compensated) > 1:
+                idx_ny4 = np.argmin(np.abs(frequencies_compensated - ny_4))
+                if idx_ny4 < len(sfr_values):
+                    sfr_at_ny4 = sfr_values[idx_ny4]
+                    # Linear interpolation for more accuracy
+                    if 0 < idx_ny4 < len(frequencies_compensated) - 1:
+                        f1, f2 = frequencies_compensated[idx_ny4], frequencies_compensated[idx_ny4 + 1]
+                        v1, v2 = sfr_values[idx_ny4], sfr_values[idx_ny4 + 1]
+                        if abs(f2 - f1) > 1e-10:
+                            sfr_at_ny4 = v1 + (ny_4 - f1) * (v2 - v1) / (f2 - f1)
+                    return sfr_at_ny4
+
+            return None
+        except Exception as e:
+            print(f"Error calculating SFR: {e}")
+            return None
+
+    def check_roi_file_exists(self):
+        """
+        Check if a .roi file exists for the current image.
+
+        Returns:
+        - bool: True if ROI file exists
+        """
+        roi_file_path = self.get_roi_file_path()
+        return roi_file_path is not None and os.path.exists(roi_file_path)
+
+    # ==================== Recent ROI Files Management ====================
+
+    def load_recent_roi_files(self):
+        """Load recent ROI files list from JSON file"""
+        try:
+            with open(self.RECENT_ROI_FILES_PATH, "r") as f:
+                self.recent_roi_files = json.load(f)
+        except Exception:
+            self.recent_roi_files = []
+
+    def save_recent_roi_files(self):
+        """Save recent ROI files list to JSON file"""
+        try:
+            with open(self.RECENT_ROI_FILES_PATH, "w") as f:
+                json.dump(self.recent_roi_files, f)
+        except Exception as e:
+            print(f"Failed to save recent ROI files: {e}")
+
+    def add_to_recent_roi_files(self, roi_file_path):
+        """Add ROI file to recent list"""
+        if roi_file_path in self.recent_roi_files:
+            self.recent_roi_files.remove(roi_file_path)
+        self.recent_roi_files.insert(0, roi_file_path)
+        if len(self.recent_roi_files) > self.max_recent_roi_files:
+            self.recent_roi_files = self.recent_roi_files[:self.max_recent_roi_files]
+        self.update_recent_roi_list()
+        self.save_recent_roi_files()
+
+    def update_recent_roi_list(self):
+        """Update the recent ROI combo box"""
+        self.ui.recent_roi_combo.clear()
+        self.ui.recent_roi_combo.addItem("-- Select ROI File --")
+        for f in self.recent_roi_files:
+            # Show only filename in combo, store full path as data
+            filename = os.path.basename(f)
+            self.ui.recent_roi_combo.addItem(filename, f)
+
+    def on_recent_roi_selected(self, index):
+        """Handle selection of ROI file from combo - enable Apply button"""
+        if index <= 0:  # Skip placeholder
+            self.loaded_roi_file_path = None
+            self.ui.btn_roi_map_apply.setEnabled(False)
+            return
+        roi_file_path = self.ui.recent_roi_combo.itemData(index)
+        if roi_file_path and os.path.exists(roi_file_path):
+            # Store the selected file path and enable Apply button
+            self.loaded_roi_file_path = roi_file_path
+            self.ui.btn_roi_map_apply.setEnabled(True)
+            self.ui.info_label.setText(f"📂 ROI file selected: {os.path.basename(roi_file_path)} - Click 'ROI apply' to apply")
+        elif roi_file_path:
+            QMessageBox.warning(self, "ROI File Not Found", f"ROI file not found: {roi_file_path}")
+            self.recent_roi_files.remove(roi_file_path)
+            self.update_recent_roi_list()
+            self.save_recent_roi_files()
+            self.loaded_roi_file_path = None
+            self.ui.btn_roi_map_apply.setEnabled(False)
+
+    # ==================== End Recent ROI Files Management ====================
+
+    # ==================== ROI Setting Handlers ====================
+
+    def on_roi_plan_mode_changed(self):
+        """Handle ROI Plan checkbox change - when enabled, enter planning mode for ROI positions"""
+        self.roi_plan_mode = self.ui.checkBox.isChecked()
+
+        if self.roi_plan_mode:
+            # Enable ROI Manual and ROI Detect buttons
+            self.ui.btn_roi_manual.setEnabled(True)
+            # Enable ROI Detect only if edge is applied
+            self.ui.btn_roi_detact.setEnabled(self.edge_overlay_applied and self.locked_edge_mask is not None)
+            # Clear all marks when entering plan mode
+            self.clear_all_marks()
+            self.ui.info_label.setText("📋 ROI Plan Mode: Pick ROI positions → Save config → Apply to any image")
+        else:
+            # Disable ROI buttons when ROI Plan Mode is off
+            self.ui.btn_roi_detact.setEnabled(False)
+            self.ui.btn_roi_manual.setEnabled(False)
+            # Exit ROI manual mode
+            self.roi_manual_mode = False
+            self.ui.btn_roi_manual.setChecked(False)
+            # Clear ROI markers from image
+            self.clear_roi_markers()
+            self.ui.info_label.setText("📊 ROI Plan Mode: OFF - Ready for SFR measurement")
+
+    def on_roi_detect(self):
+        """Handle ROI Detect button - auto-detect edges for ROI placement"""
+        if self.raw_data is None:
+            self.ui.info_label.setText("⚠️ Load an image first")
+            return
+        # Clear all marks before detecting
+        self.clear_all_marks()
+        # TODO: Implement auto-detection of ROI positions based on edge detection
+        self.ui.info_label.setText("🔍 ROI Detect: Auto-detecting edge positions...")
+
+    def on_roi_manual(self):
+        """Handle ROI Manual button - toggle manual ROI placement mode"""
+        if self.raw_data is None:
+            self.ui.info_label.setText("⚠️ Load an image first")
+            return
+
+        # Toggle ROI manual mode
+        self.roi_manual_mode = not self.roi_manual_mode
+        self.ui.btn_roi_manual.setChecked(self.roi_manual_mode)
+
+        if self.roi_manual_mode:
+            # Clear all marks when starting manual ROI mode
+            self.clear_all_marks()
+            # Enter ROI plan mode
+            self.roi_plan_mode = True
+            self.ui.info_label.setText(f"✋ ROI Manual: Click to place ROI markers (Size: {self.click_select_size}×{self.click_select_size})")
+        else:
+            num_markers = len(self.roi_markers)
+            self.ui.info_label.setText(f"📋 ROI Manual mode OFF - {num_markers} ROI(s) placed")
+
+    def clear_roi_markers(self):
+        """Clear all ROI markers and visual marks from the image (except the loaded .raw image)"""
+        self.clear_all_marks()
+        # Disable ROI Save button since no markers exist
+        self.ui.btn_roi_map_save.setEnabled(False)
+
+    def on_roi_map_load(self):
+        """Handle Load .roi button - open file dialog and save path to recent ROI combo"""
+        from PyQt5.QtWidgets import QFileDialog
+        roi_file, _ = QFileDialog.getOpenFileName(
+            self, "Load ROI File", "", "ROI Files (*.roi);;All Files (*)"
+        )
+        if roi_file:
+            # Save to recent ROI files
+            self.add_to_recent_roi_files(roi_file)
+            # Store the loaded file path
+            self.loaded_roi_file_path = roi_file
+            # Enable ROI Apply button
+            self.ui.btn_roi_map_apply.setEnabled(True)
+            # Select the file in combo
+            self.ui.recent_roi_combo.setCurrentIndex(1)  # First item after placeholder
+            self.ui.info_label.setText(f"📂 ROI file loaded: {os.path.basename(roi_file)} - Click 'ROI apply' to apply")
+
+    def on_roi_map_apply(self):
+        """Handle ROI Apply button - apply the loaded ROI config to current image"""
+        if self.loaded_roi_file_path is None:
+            # Try to get from combo selection
+            index = self.ui.recent_roi_combo.currentIndex()
+            if index > 0:
+                self.loaded_roi_file_path = self.ui.recent_roi_combo.itemData(index)
+
+        if self.loaded_roi_file_path and os.path.exists(self.loaded_roi_file_path):
+            # Clear all marks before applying new ROI config
+            self.clear_all_marks()
+            self.apply_roi_from_file(self.loaded_roi_file_path)
+        else:
+            self.ui.info_label.setText("⚠️ No ROI file loaded - use 'Load .roi' first")
+
+    def on_roi_load(self):
+        """Handle ROI Load button - load ROI configuration from file"""
+        if self.current_image_path is None:
+            self.ui.info_label.setText("⚠️ Load an image first")
+            return
+
+        # Try to load ROI file for current image
+        if self.check_roi_file_exists():
+            self.apply_roi_from_file()
+        else:
+            # Show file dialog to select ROI file
+            from PyQt5.QtWidgets import QFileDialog
+            roi_file, _ = QFileDialog.getOpenFileName(
+                self, "Load ROI File", "", "ROI Files (*.roi);;All Files (*)"
+            )
+            if roi_file:
+                self.apply_roi_from_file(roi_file)
+
+    def on_roi_save(self):
+        """Handle ROI Save button - save all ROI markers to file"""
+        if not self.roi_markers or len(self.roi_markers) == 0:
+            self.ui.info_label.setText("⚠️ No ROI markers to save")
+            return
+
+        if self.current_image_path is None:
+            self.ui.info_label.setText("⚠️ Load an image first")
+            return
+
+        # Save all ROI markers to file
+        saved_path = self.save_roi_markers_file()
+        if saved_path:
+            self.ui.info_label.setText(f"💾 {len(self.roi_markers)} ROI(s) saved to: {os.path.basename(saved_path)}")
+
+    def save_roi_markers_file(self):
+        """Save all ROI markers to a .roi JSON file"""
+        if self.current_image_path is None:
+            return None
+
+        roi_file_path = self.get_roi_file_path()
+        if roi_file_path is None:
+            return None
+
+        from datetime import datetime
+
+        # Build ROI config with positions only (SFR calculated when applied)
+        roi_list = []
+        for marker in self.roi_markers:
+            if len(marker) >= 5:
+                x, y, w, h, name = marker[:5]
+            else:
+                continue  # Skip invalid markers
+
+            roi_item = {
+                "name": name,
+                "x": int(x),
+                "y": int(y),
+                "w": int(w),
+                "h": int(h)
+            }
+            roi_list.append(roi_item)
+
+        roi_data = {
+            "version": "1.0",
+            "type": "roi_config",  # Indicates this is a position config file
+            "source_image": os.path.basename(self.current_image_path),
+            "timestamp": datetime.now().isoformat(),
+            "image_dimensions": {
+                "width": self.image_w,
+                "height": self.image_h
+            },
+            "roi_size": self.click_select_size,
+            "roi_count": len(roi_list),
+            "rois": roi_list
+        }
+
+        try:
+            with open(roi_file_path, "w") as f:
+                json.dump(roi_data, f, indent=2)
+
+            # Store current ROI data for reference
+            self.current_roi_data = roi_data
+
+            # Add to recent ROI files list
+            self.add_to_recent_roi_files(roi_file_path)
+
+            return roi_file_path
+
+        except Exception as e:
+            self.ui.info_label.setText(f"❌ Failed to save ROI: {e}")
+            print(f"Failed to save ROI file: {e}")
+            return None
+
+    # ==================== End ROI Setting Handlers ====================
+
+    # ==================== End ROI File Management ====================
+
     def load_recent_files(self):
         try:
             with open(self.RECENT_FILES_PATH, "r") as f:
@@ -1113,6 +1887,7 @@ class MainWindow(QMainWindow):
                 fname, width=w, height=h, dtype=selected_dtype
             )
             if self.raw_data is not None:
+                self.current_image_path = fname  # Track current loaded image
                 if self.raw_data.dtype != np.uint8:
                     display_data = (
                         (self.raw_data - self.raw_data.min())
@@ -1122,7 +1897,7 @@ class MainWindow(QMainWindow):
                 else:
                     display_data = self.raw_data
                 self.display_image(display_data)
-                self.ui.info_label.setText(
+                self.ui.label_raw_load.setText(
                     f"Loaded: {fname} ({w}x{h}, {dtype_choice})"
                 )
                 self.add_to_recent_files(fname)
@@ -1158,6 +1933,7 @@ class MainWindow(QMainWindow):
             )
 
             if self.raw_data is not None:
+                self.current_image_path = fname  # Track current loaded image
                 # Normalize to 8-bit for display if necessary
                 if self.raw_data.dtype != np.uint8:
                     display_data = (
@@ -1169,7 +1945,7 @@ class MainWindow(QMainWindow):
                     display_data = self.raw_data
 
                 self.display_image(display_data)
-                self.ui.info_label.setText(
+                self.ui.label_raw_load.setText(
                     f"Loaded: {fname} ({self.image_w}x{self.image_h}, {dtype_choice})"
                 )
                 self.add_to_recent_files(fname)
@@ -1408,15 +2184,62 @@ class MainWindow(QMainWindow):
             )
 
     def on_selection_mode_changed(self):
-        """Handle selection mode change (Drag vs Click 40x40)"""
+        """Handle selection mode change (Drag vs Click vs ROI map)"""
         if self.ui.radio_drag.isChecked():
             self.selection_mode = "drag"
+            self.ui.recent_roi_combo.setEnabled(False)
             self.ui.info_label.setText("Selection Mode: Drag Select (draw rectangle)")
-        else:
+        elif self.ui.radio_click.isChecked():
             self.selection_mode = "click"
+            self.ui.recent_roi_combo.setEnabled(False)
             self.ui.info_label.setText(
                 f"Selection Mode: Click {self.click_select_size}×{self.click_select_size} (single click to select area)"
             )
+        elif self.ui.radio_script_roi.isChecked():
+            self.selection_mode = "script_roi"
+            self.ui.recent_roi_combo.setEnabled(True)
+            # Clear all SFR results and marks when entering ROI map mode
+            self.clear_all_marks()
+            self.ui.info_label.setText("Selection Mode: ROI map (select from saved ROI config files)")
+
+    def clear_all_marks(self):
+        """Clear all visual marks and SFR results from the image (keep only the loaded .raw image)"""
+        # Clear ROI markers
+        self.roi_markers = []
+        if hasattr(self, 'image_label') and self.image_label:
+            self.image_label.roi_markers = []
+
+            # Clear selection rectangle
+            self.image_label.selection_rect = None
+            self.image_label.selection_start = None
+            self.image_label.selection_end = None
+            self.image_label.is_selecting = False
+
+            # Clear SFR value display on image
+            self.image_label.roi_sfr_value = None
+            self.image_label.roi_position = None
+
+            # Update image display
+            self.image_label.update()
+
+        # Clear SFR plots
+        if hasattr(self, 'ax_esf') and self.ax_esf:
+            self.ax_esf.clear()
+            self.ax_esf.set_title("ESF (Edge Spread Function)", fontsize=10, fontweight="bold")
+        if hasattr(self, 'ax_lsf') and self.ax_lsf:
+            self.ax_lsf.clear()
+            self.ax_lsf.set_title("LSF (Line Spread Function)", fontsize=10, fontweight="bold")
+        if hasattr(self, 'ax_sfr') and self.ax_sfr:
+            self.ax_sfr.clear()
+            self.ax_sfr.set_title("SFR/MTF", fontsize=10, fontweight="bold")
+        if hasattr(self, 'ax_roi') and self.ax_roi:
+            self.ax_roi.clear()
+            self.ax_roi.set_title("ROI Image", fontsize=10, fontweight="bold")
+        if hasattr(self, 'canvas') and self.canvas:
+            self.canvas.draw()
+
+        # Clear last SFR data
+        self.last_sfr_data = None
 
     def on_click_size_changed(self):
         """Handle click select size change"""
@@ -1559,6 +2382,10 @@ class MainWindow(QMainWindow):
         self.edge_detect_enabled = True
         self.edge_overlay_applied = True
 
+        # Enable ROI Detect button if ROI Plan Mode is on
+        if self.roi_plan_mode:
+            self.ui.btn_roi_detact.setEnabled(True)
+
         # Display with locked edge
         self.display_with_locked_edge()
         self.ui.info_label.setText(f"🔒 Edge LOCKED (Threshold: {self.edge_threshold}) - Pattern fixed as reference")
@@ -1573,6 +2400,10 @@ class MainWindow(QMainWindow):
         self.edge_detect_enabled = False
         self.edge_overlay_applied = False
         self.locked_edge_mask = None  # Clear the locked edge pattern
+
+        # Disable ROI Detect button since edge is no longer applied
+        self.ui.btn_roi_detact.setEnabled(False)
+
         self.show_image_without_edge()
         self.ui.info_label.setText("🧹 Edge Erased - Locked pattern cleared")
 
@@ -1638,8 +2469,35 @@ class MainWindow(QMainWindow):
 
         roi = self.raw_data[y : y + h, x : x + w]
 
-        # 4. Detect Slit Edge and Edge Orientation (using adjustable threshold)
-        is_edge, msg, edge_type, confidence = SFRCalculator.validate_edge(roi, threshold=self.edge_threshold)
+        # ROI Plan Mode: Only show ROI info, skip SFR calculation
+        if self.roi_plan_mode:
+            # Detect edge type for display only
+            is_edge, msg, edge_type, confidence = SFRCalculator.validate_edge(roi, threshold=self.edge_threshold)
+            if is_edge:
+                self.ui.info_label.setText(
+                    f"📋 ROI Plan Mode: ({x},{y}) {w}×{h} | {edge_type} (Conf: {confidence:.1f}%) - SFR paused"
+                )
+                # Store ROI data for potential save
+                self.current_roi_data = {
+                    "roi": {"x": x, "y": y, "w": w, "h": h},
+                    "edge_type": edge_type,
+                    "confidence": confidence
+                }
+            else:
+                self.ui.info_label.setText(
+                    f"📋 ROI Plan Mode: ({x},{y}) {w}×{h} | No edge detected - SFR paused"
+                )
+            return  # Skip SFR calculation
+
+        # Standardize ROI orientation: vertical edge with dark side left, bright side right
+        std_roi, std_edge_type, std_confidence = SFRCalculator.standardize_roi_orientation(roi)
+
+        # 4. Detect Slit Edge and Edge Orientation (using adjustable threshold) on standardized ROI
+        is_edge, msg, edge_type, confidence = SFRCalculator.validate_edge(std_roi, threshold=self.edge_threshold)
+
+        # Use standardized edge type if available
+        if std_edge_type is not None:
+            edge_type = std_edge_type
 
         if is_edge:
             if self.sfr_stabilize_enabled:
@@ -1647,15 +2505,15 @@ class MainWindow(QMainWindow):
                 self.ui.info_label.setText(
                     f"Edge Detected: {edge_type} - Collecting {3} samples for stability..."
                 )
-                self.process_roi_with_stabilize(roi, edge_type, x, y, w, h)
+                self.process_roi_with_stabilize(std_roi, edge_type, x, y, w, h)
             else:
                 # Normal single measurement
                 self.ui.info_label.setText(
                     f"Edge Detected: {edge_type} (Confidence: {confidence:.1f}%) - Calculating SFR..."
                 )
-                # 5. Input to SFR Algo with edge type and compensation enabled
+                # 5. Input to SFR Algo with edge type and compensation enabled (using standardized ROI)
                 result = SFRCalculator.calculate_sfr(
-                    roi,
+                    std_roi,
                     edge_type=edge_type,
                     compensate_bias=True,
                     compensate_noise=True,
@@ -1665,10 +2523,13 @@ class MainWindow(QMainWindow):
 
                 # 6. Show Result
                 if freqs is not None:
-                    sfr_at_ny4 = self.plot_sfr(freqs, sfr_values, esf, lsf, edge_type, roi_image=roi)
+                    sfr_at_ny4 = self.plot_sfr(freqs, sfr_values, esf, lsf, edge_type, roi_image=std_roi)
 
                     # Display SFR value at top-right corner of ROI
                     self.image_label.set_roi_sfr_display(sfr_at_ny4, x, y, w, h)
+
+                    # Save ROI to file for future reuse (save original coordinates)
+                    self.save_roi_file(x, y, w, h, edge_type, confidence)
 
                     mtf50_idx = np.argmin(np.abs(sfr_values - 0.5))
                     mtf50_val = freqs[mtf50_idx] if mtf50_idx < len(freqs) else 0
@@ -1703,15 +2564,21 @@ class MainWindow(QMainWindow):
 
             roi_sample = self.raw_data[roi_y : roi_y + h, roi_x : roi_x + w]
 
-            # Validate edge (using adjustable threshold)
+            # Standardize each sample orientation before validation and calculation
+            roi_sample_std, sample_edge_type, sample_conf = SFRCalculator.standardize_roi_orientation(roi_sample)
+
+            # Validate edge on standardized sample (using adjustable threshold)
             is_edge, msg, edge_type_check, confidence = SFRCalculator.validate_edge(
-                roi_sample, threshold=self.edge_threshold
+                roi_sample_std, threshold=self.edge_threshold
             )
 
             if is_edge and confidence > 50:  # Minimum confidence threshold
+                # Use standardized edge type if available
+                used_edge_type = sample_edge_type if sample_edge_type is not None else edge_type
+
                 result = SFRCalculator.calculate_sfr(
-                    roi_sample,
-                    edge_type=edge_type,
+                    roi_sample_std,
+                    edge_type=used_edge_type,
                     compensate_bias=True,
                     compensate_noise=True,
                     lsf_smoothing_method=self.lsf_smoothing_method,
@@ -1762,6 +2629,9 @@ class MainWindow(QMainWindow):
 
             # Display SFR value at top-left corner of ROI
             self.image_label.set_roi_sfr_display(sfr_at_ny4, x, y, w, h)
+
+            # Save ROI to file for future reuse
+            self.save_roi_file(x, y, w, h, edge_type, 85.0)  # Use default confidence for stabilized
 
             mtf50_idx = np.argmin(np.abs(sfr_averaged - 0.5))
             mtf50_val = freqs[mtf50_idx] if mtf50_idx < len(freqs) else 0
