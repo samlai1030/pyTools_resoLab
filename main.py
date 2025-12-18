@@ -1211,7 +1211,6 @@ class MainWindow(QMainWindow):
         (800, 600, 2, "uint16", "800×600 16bit (SVGA)"),
         (1024, 768, 2, "uint16", "1024×768 16bit (XGA)"),
         (1280, 720, 2, "uint16", "1280×720 16bit (HD 720p)"),
-        (1280, 960, 2, "uint16", "1280×960 16bit"),
         (1920, 1080, 2, "uint16", "1920×1080 16bit (Full HD)"),
         (2048, 1536, 2, "uint16", "2048×1536 16bit (3MP)"),
         (2560, 1440, 2, "uint16", "2560×1440 16bit (QHD)"),
@@ -1233,7 +1232,6 @@ class MainWindow(QMainWindow):
         (800, 600, 1, "uint8", "800×600 8bit (SVGA)"),
         (1024, 768, 1, "uint8", "1024×768 8bit (XGA)"),
         (1280, 720, 1, "uint8", "1280×720 8bit (HD 720p)"),
-        (1280, 960, 1, "uint8", "1280×960 8bit"),
         (1920, 1080, 1, "uint8", "1920×1080 8bit (Full HD)"),
         (2048, 1536, 1, "uint8", "2048×1536 8bit (3MP)"),
         (2592, 1944, 1, "uint8", "2592×1944 8bit (5MP)"),
@@ -2236,9 +2234,29 @@ class MainWindow(QMainWindow):
                 bit_hint = 4
 
         # Strategy 2: Common raw image dimensions to check
+        # 8-bit formats scanned first (more common for processed images)
         common_sizes = [
             # (width, height, bytes_per_pixel, dtype_name)
-            # Sensor common sizes - 16-bit first (more common for raw)
+            # 8-bit versions first
+            (640, 480, 1, "uint8"),       # VGA
+            (640, 640, 1, "uint8"),       # Square
+            (640, 641, 1, "uint8"),
+            (800, 600, 1, "uint8"),       # SVGA
+            (1024, 768, 1, "uint8"),      # XGA
+            (1280, 720, 1, "uint8"),      # HD 720p
+            (1920, 1080, 1, "uint8"),     # Full HD
+            (2048, 1536, 1, "uint8"),     # 3MP
+            (2592, 1944, 1, "uint8"),     # 5MP
+            (3264, 2448, 1, "uint8"),     # 8MP
+            (4032, 3024, 1, "uint8"),     # 12MP
+            (4096, 2160, 1, "uint8"),     # 4K
+            (256, 256, 1, "uint8"),       # Square test
+            (640, 1920, 1, "uint8"),  # Innorev Tester
+            (512, 512, 1, "uint8"),
+            (1024, 1024, 1, "uint8"),
+            (2048, 2048, 1, "uint8"),
+            (4096, 4096, 1, "uint8"),
+            # Sensor common sizes - 16-bit (raw sensor data)
             (4000, 3000, 2, "uint16"),    # 12MP sensor
             (4032, 3024, 2, "uint16"),    # 12MP iPhone
             (4608, 3456, 2, "uint16"),    # 16MP
@@ -2259,7 +2277,6 @@ class MainWindow(QMainWindow):
             (800, 600, 2, "uint16"),
             (1024, 768, 2, "uint16"),
             (1280, 720, 2, "uint16"),     # HD 720p
-            (1280, 960, 2, "uint16"),
             (1920, 1080, 2, "uint16"),    # Full HD
             (2048, 1536, 2, "uint16"),    # 3MP
             (2560, 1440, 2, "uint16"),    # QHD
@@ -2274,25 +2291,6 @@ class MainWindow(QMainWindow):
             (1024, 1024, 2, "uint16"),
             (2048, 2048, 2, "uint16"),
             (4096, 4096, 2, "uint16"),
-            # 8-bit versions
-            (640, 480, 1, "uint8"),
-            (800, 600, 1, "uint8"),
-            (1024, 768, 1, "uint8"),
-            (1280, 720, 1, "uint8"),
-            (1280, 960, 1, "uint8"),
-            (1920, 1080, 1, "uint8"),
-            (2048, 1536, 1, "uint8"),
-            (2592, 1944, 1, "uint8"),
-            (3264, 2448, 1, "uint8"),
-            (4032, 3024, 1, "uint8"),
-            (4096, 2160, 1, "uint8"),
-            (256, 256, 1, "uint8"),
-            (512, 512, 1, "uint8"),
-            (640, 640, 1, "uint8"),
-            (640, 641, 1, "uint8"),
-            (1024, 1024, 1, "uint8"),
-            (2048, 2048, 1, "uint8"),
-            (4096, 4096, 1, "uint8"),
         ]
 
         # Check each common size
@@ -2301,15 +2299,15 @@ class MainWindow(QMainWindow):
             if file_size == expected_size:
                 return (w, h, dtype_name)
 
-        # Strategy 3: Try to find square image dimensions
-        for bpp, dtype_name in [(2, "uint16"), (1, "uint8"), (4, "float32")]:
+        # Strategy 3: Try to find square image dimensions (uint8 first)
+        for bpp, dtype_name in [(1, "uint8"), (2, "uint16"), (4, "float32")]:
             pixels = file_size // bpp
             side = int(np.sqrt(pixels))
             if side * side * bpp == file_size:
                 return (side, side, dtype_name)
 
-        # Strategy 4: Try common aspect ratios (4:3, 16:9, 3:2, 1.5:1)
-        for bpp, dtype_name in [(2, "uint16"), (1, "uint8"), (4, "float32")]:
+        # Strategy 4: Try common aspect ratios (4:3, 16:9, 3:2, 1.5:1) - uint8 first
+        for bpp, dtype_name in [(1, "uint8"), (2, "uint16"), (4, "float32")]:
             pixels = file_size // bpp
             if pixels == 0:
                 continue
