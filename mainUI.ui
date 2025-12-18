@@ -73,16 +73,47 @@
             </widget>
            </item>
            <item>
-            <widget class="QLabel" name="label_raw_load">
-             <property name="maximumSize">
-              <size>
-               <width>500</width>
-               <height>16777215</height>
-              </size>
+            <widget class="Line" name="line_raw_format">
+             <property name="orientation">
+              <enum>Qt::Vertical</enum>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="label_raw_format">
+             <property name="font">
+              <font>
+               <weight>50</weight>
+               <bold>false</bold>
+              </font>
              </property>
              <property name="text">
-              <string>File (.raw) :</string>
+              <string>Format:</string>
              </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QComboBox" name="raw_format_combo">
+             <property name="minimumSize">
+              <size>
+               <width>180</width>
+               <height>0</height>
+              </size>
+             </property>
+             <property name="font">
+              <font>
+               <weight>50</weight>
+               <bold>false</bold>
+              </font>
+             </property>
+             <property name="toolTip">
+              <string>Select raw image format (Auto-detect or manual selection)</string>
+             </property>
+             <item>
+              <property name="text">
+               <string>Auto Detect</string>
+              </property>
+             </item>
             </widget>
            </item>
            <item>
@@ -674,11 +705,24 @@
             </widget>
            </item>
            <item>
-            <widget class="QLabel" name="info_label">
-             <property name="maximumSize">
+            <widget class="QLabel" name="supersampling_label">
+             <property name="font">
+              <font>
+               <weight>50</weight>
+               <bold>false</bold>
+              </font>
+             </property>
+             <property name="text">
+              <string>Supersample:</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QSpinBox" name="supersampling_spinbox">
+             <property name="minimumSize">
               <size>
-               <width>500</width>
-               <height>16777215</height>
+               <width>60</width>
+               <height>0</height>
               </size>
              </property>
              <property name="font">
@@ -687,8 +731,20 @@
                <bold>false</bold>
               </font>
              </property>
-             <property name="text">
-              <string>Status: Ready</string>
+             <property name="toolTip">
+              <string>Supersampling factor for SFR calculation (1-16x)</string>
+             </property>
+             <property name="minimum">
+              <number>1</number>
+             </property>
+             <property name="maximum">
+              <number>16</number>
+             </property>
+             <property name="value">
+              <number>4</number>
+             </property>
+             <property name="suffix">
+              <string>x</string>
              </property>
             </widget>
            </item>

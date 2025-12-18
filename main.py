@@ -148,6 +148,66 @@ def read_raw_image(file_path, width=None, height=None, dtype=np.uint16):
         return None
 
 
+def remove_inactive_borders(image, threshold=0):
+    """
+    Remove black/inactive borders from image edges.
+
+    Removes rows and columns that are entirely below the threshold value,
+    effectively cropping out inactive/black borders from sensor images.
+
+    Parameters:
+    - image: numpy array (2D grayscale or raw image)
+    - threshold: pixel value threshold (pixels <= threshold are considered inactive)
+
+    Returns:
+    - cropped image with inactive borders removed
+    - crop_info: dict with original size, new size, and crop offsets
+    """
+    if image is None or image.size == 0:
+        return image, None
+
+    original_shape = image.shape
+
+    # Find rows and columns with active pixels (above threshold)
+    row_mask = np.any(image > threshold, axis=1)
+    col_mask = np.any(image > threshold, axis=0)
+
+    # Get indices of first and last active rows/columns
+    active_rows = np.where(row_mask)[0]
+    active_cols = np.where(col_mask)[0]
+
+    if len(active_rows) == 0 or len(active_cols) == 0:
+        # No active pixels found, return original
+        return image, {
+            "original_size": original_shape,
+            "new_size": original_shape,
+            "crop_top": 0,
+            "crop_bottom": 0,
+            "crop_left": 0,
+            "crop_right": 0,
+            "rows_removed": 0,
+            "cols_removed": 0
+        }
+
+    row_start, row_end = active_rows[0], active_rows[-1] + 1
+    col_start, col_end = active_cols[0], active_cols[-1] + 1
+
+    cropped = image[row_start:row_end, col_start:col_end]
+
+    crop_info = {
+        "original_size": original_shape,
+        "new_size": cropped.shape,
+        "crop_top": row_start,
+        "crop_bottom": original_shape[0] - row_end,
+        "crop_left": col_start,
+        "crop_right": original_shape[1] - col_end,
+        "rows_removed": original_shape[0] - cropped.shape[0],
+        "cols_removed": original_shape[1] - cropped.shape[1]
+    }
+
+    return cropped, crop_info
+
+
 class SFRCalculator:
     """物理運算核心：處理邊緣檢測與 SFR 計算"""
 
@@ -1008,29 +1068,39 @@ class ImageLabel(QLabel):
                 painter.setPen(pen)
                 painter.drawRect(disp_x, disp_y, disp_w, disp_h)
 
-                # Prepare label text (name + SFR value if available)
-                if sfr_value is not None:
-                    label_text = f"{roi_name}: {sfr_value*100:.1f}%"
-                else:
-                    label_text = roi_name
-
-                # Draw label on top of the rectangle
+                # Prepare label text - two lines: "ROI:" and "{value}"
                 metrics = painter.fontMetrics()
-                text_width = metrics.horizontalAdvance(label_text)
-                text_height = metrics.height()
+                line_height = metrics.height()
+
+                if sfr_value is not None:
+                    line1 = f"{roi_name}:"
+                    line2 = f"{sfr_value*100:.2f}%"
+                else:
+                    line1 = roi_name
+                    line2 = None
+
+                # Calculate text dimensions
+                line1_width = metrics.horizontalAdvance(line1)
+                line2_width = metrics.horizontalAdvance(line2) if line2 else 0
+                max_text_width = max(line1_width, line2_width)
+                total_height = line_height * 2 if line2 else line_height
 
                 # Position text at top of ROI rectangle (inside, at top-left)
                 text_x = disp_x + 3
-                text_y = disp_y + text_height + 2
+                text_y = disp_y + line_height + 2
 
                 # Draw semi-transparent background for label
                 bg_rect = QRect(text_x - 2, disp_y + 2,
-                               text_width + 4, text_height + 2)
+                               max_text_width + 6, total_height + 4)
                 painter.fillRect(bg_rect, QColor(255, 0, 0, 200))  # Red background
 
-                # Draw text (white)
+                # Draw first line (ROI name)
                 painter.setPen(QColor(255, 255, 255))
-                painter.drawText(text_x, text_y, label_text)
+                painter.drawText(text_x, text_y, line1)
+
+                # Draw second line (SFR value) if available
+                if line2:
+                    painter.drawText(text_x, text_y + line_height, line2)
 
         # End painter properly
         painter.end()
@@ -1116,6 +1186,67 @@ class ImageLabel(QLabel):
 class MainWindow(QMainWindow):
     RECENT_FILES_PATH = "recent_files.json"
 
+    # Common raw image format options: (width, height, bytes_per_pixel, dtype_name, display_name)
+    RAW_FORMAT_OPTIONS = [
+        # Auto detect option
+        (0, 0, 0, "auto", "Auto Detect"),
+        # Sensor common sizes - 16-bit
+        (4000, 3000, 2, "uint16", "4000×3000 16bit (12MP)"),
+        (4032, 3024, 2, "uint16", "4032×3024 16bit (12MP iPhone)"),
+        (4608, 3456, 2, "uint16", "4608×3456 16bit (16MP)"),
+        (4624, 3472, 2, "uint16", "4624×3472 16bit (Sony IMX)"),
+        (4656, 3496, 2, "uint16", "4656×3496 16bit (Sony IMX)"),
+        (5184, 3888, 2, "uint16", "5184×3888 16bit (20MP)"),
+        (5472, 3648, 2, "uint16", "5472×3648 16bit (20MP)"),
+        (6000, 4000, 2, "uint16", "6000×4000 16bit (24MP)"),
+        (6016, 4016, 2, "uint16", "6016×4016 16bit (Sony A7)"),
+        (6048, 4024, 2, "uint16", "6048×4024 16bit (Sony)"),
+        (7952, 5304, 2, "uint16", "7952×5304 16bit (Canon 5D)"),
+        (8192, 5464, 2, "uint16", "8192×5464 16bit (Canon R5)"),
+        (8256, 5504, 2, "uint16", "8256×5504 16bit (45MP)"),
+        (9504, 6336, 2, "uint16", "9504×6336 16bit (60MP)"),
+        # Video/display resolutions - 16-bit
+        (640, 480, 2, "uint16", "640×480 16bit (VGA)"),
+        (640, 640, 2, "uint16", "640×640 16bit (Square)"),
+        (800, 600, 2, "uint16", "800×600 16bit (SVGA)"),
+        (1024, 768, 2, "uint16", "1024×768 16bit (XGA)"),
+        (1280, 720, 2, "uint16", "1280×720 16bit (HD 720p)"),
+        (1280, 960, 2, "uint16", "1280×960 16bit"),
+        (1920, 1080, 2, "uint16", "1920×1080 16bit (Full HD)"),
+        (2048, 1536, 2, "uint16", "2048×1536 16bit (3MP)"),
+        (2560, 1440, 2, "uint16", "2560×1440 16bit (QHD)"),
+        (2592, 1944, 2, "uint16", "2592×1944 16bit (5MP)"),
+        (3264, 2448, 2, "uint16", "3264×2448 16bit (8MP)"),
+        (3840, 2160, 2, "uint16", "3840×2160 16bit (4K UHD)"),
+        (4096, 2160, 2, "uint16", "4096×2160 16bit (4K DCI)"),
+        # Square sizes - 16-bit
+        (256, 256, 2, "uint16", "256×256 16bit"),
+        (512, 512, 2, "uint16", "512×512 16bit"),
+        (1024, 1024, 2, "uint16", "1024×1024 16bit"),
+        (2048, 2048, 2, "uint16", "2048×2048 16bit"),
+        (4096, 4096, 2, "uint16", "4096×4096 16bit"),
+        # 8-bit versions
+        (640, 480, 1, "uint8", "640×480 8bit (VGA)"),
+        (640, 640, 1, "uint8", "640×640 8bit (Square)"),
+        (640, 1920, 1, "uint8", "640×1920 8bit"),
+        (640, 641, 1, "uint8", "640×641 8bit"),
+        (800, 600, 1, "uint8", "800×600 8bit (SVGA)"),
+        (1024, 768, 1, "uint8", "1024×768 8bit (XGA)"),
+        (1280, 720, 1, "uint8", "1280×720 8bit (HD 720p)"),
+        (1280, 960, 1, "uint8", "1280×960 8bit"),
+        (1920, 1080, 1, "uint8", "1920×1080 8bit (Full HD)"),
+        (2048, 1536, 1, "uint8", "2048×1536 8bit (3MP)"),
+        (2592, 1944, 1, "uint8", "2592×1944 8bit (5MP)"),
+        (3264, 2448, 1, "uint8", "3264×2448 8bit (8MP)"),
+        (4032, 3024, 1, "uint8", "4032×3024 8bit (12MP)"),
+        (4096, 2160, 1, "uint8", "4096×2160 8bit (4K)"),
+        (256, 256, 1, "uint8", "256×256 8bit"),
+        (512, 512, 1, "uint8", "512×512 8bit"),
+        (1024, 1024, 1, "uint8", "1024×1024 8bit"),
+        (2048, 2048, 1, "uint8", "2048×2048 8bit"),
+        (4096, 4096, 1, "uint8", "4096×4096 8bit"),
+    ]
+
     def __init__(self):
         super().__init__()
         self.ui = Ui_MainWindow()
@@ -1129,6 +1260,9 @@ class MainWindow(QMainWindow):
         self.current_roi_data = None  # Store current ROI selection data for saving
         self.image_w = 640  # 預設，實際應由使用者輸入
         self.image_h = 640
+
+        # Selected raw format index (0 = auto detect)
+        self.selected_raw_format_index = 0
 
         # LSF Smoothing method selection
         self.lsf_smoothing_method = "none"  # Default method
@@ -1185,6 +1319,7 @@ class MainWindow(QMainWindow):
     def init_ui_connections(self):
         self.ui.btn_load.clicked.connect(self.load_raw_file)
         self.ui.recent_files_combo.activated.connect(self.on_recent_file_selected)
+        self.ui.raw_format_combo.currentIndexChanged.connect(self.on_raw_format_changed)
         self.ui.radio_drag.toggled.connect(self.on_selection_mode_changed)
         self.ui.radio_click.toggled.connect(self.on_selection_mode_changed)
         self.ui.radio_script_roi.toggled.connect(self.on_selection_mode_changed)
@@ -1196,6 +1331,9 @@ class MainWindow(QMainWindow):
         self.ui.stabilize_checkbox.stateChanged.connect(self.on_stabilize_filter_changed)
         self.ui.supersampling_spinbox.valueChanged.connect(self.on_supersampling_changed)
         self.ui.edge_detect_checkbox.stateChanged.connect(self.on_edge_detect_changed)
+
+        # Initialize raw format combobox with options from RAW_FORMAT_OPTIONS
+        self.init_raw_format_combo()
         self.ui.edge_threshold_slider.valueChanged.connect(self.on_edge_threshold_changed)
         self.ui.btn_apply_edge.clicked.connect(self.on_apply_edge)
         self.ui.btn_erase_edge.clicked.connect(self.on_erase_edge)
@@ -1876,26 +2014,79 @@ class MainWindow(QMainWindow):
             self.update_recent_files_list()
             self.save_recent_files()  # Save after removing invalid file
 
+    def init_raw_format_combo(self):
+        """Initialize the raw format combobox with options from RAW_FORMAT_OPTIONS"""
+        self.ui.raw_format_combo.clear()
+        for w, h, bpp, dtype_name, display_name in self.RAW_FORMAT_OPTIONS:
+            self.ui.raw_format_combo.addItem(display_name, (w, h, bpp, dtype_name))
+        self.ui.raw_format_combo.setCurrentIndex(0)  # Default to Auto Detect
+
+    def on_raw_format_changed(self, index):
+        """Handle raw format combobox selection change"""
+        self.selected_raw_format_index = index
+        if index == 0:
+            self.statusBar().showMessage("Raw Format: Auto Detect - will detect dimensions from file size/name")
+        else:
+            data = self.ui.raw_format_combo.itemData(index)
+            if data:
+                w, h, bpp, dtype_name = data
+                self.statusBar().showMessage(f"Raw Format: {w}×{h} {dtype_name} ({bpp} bytes/pixel)")
+
     def load_raw_file_from_path(self, fname):
         # This is a refactor of load_raw_file to allow loading from a given path (no dialog)
         if not fname:
             return
+
         file_size = os.path.getsize(fname)
-        detected_w, detected_h, detected_dtype = self.auto_detect_raw_dimensions(file_size, fname)
-        if detected_w > 0 and detected_h > 0:
-            self.image_w = detected_w
-            self.image_h = detected_h
-        w = self.image_w
-        h = self.image_h
         dtype_options = {"uint8": np.uint8, "uint16": np.uint16, "float32": np.float32}
-        dtype_choice = detected_dtype if detected_dtype in dtype_options else "uint16"
-        selected_dtype = dtype_options[dtype_choice]
+
+        # Check if manual format is selected (index > 0)
+        if self.selected_raw_format_index > 0:
+            # Use manually selected format
+            format_data = self.ui.raw_format_combo.itemData(self.selected_raw_format_index)
+            if format_data:
+                w, h, bpp, dtype_name = format_data
+                self.image_w = w
+                self.image_h = h
+                dtype_choice = dtype_name
+            else:
+                # Fallback to auto-detect
+                detected_w, detected_h, detected_dtype = self.auto_detect_raw_dimensions(file_size, fname)
+                if detected_w > 0 and detected_h > 0:
+                    self.image_w = detected_w
+                    self.image_h = detected_h
+                w, h = self.image_w, self.image_h
+                dtype_choice = detected_dtype if detected_dtype in dtype_options else "uint16"
+        else:
+            # Auto-detect mode
+            detected_w, detected_h, detected_dtype = self.auto_detect_raw_dimensions(file_size, fname)
+            if detected_w > 0 and detected_h > 0:
+                self.image_w = detected_w
+                self.image_h = detected_h
+            w, h = self.image_w, self.image_h
+            dtype_choice = detected_dtype if detected_dtype in dtype_options else "uint16"
+
+        selected_dtype = dtype_options.get(dtype_choice, np.uint16)
         try:
             self.raw_data = read_raw_image(
                 fname, width=w, height=h, dtype=selected_dtype
             )
             if self.raw_data is not None:
                 self.current_image_path = fname  # Track current loaded image
+
+                # Remove inactive borders (black edges)
+                original_shape = self.raw_data.shape
+                self.raw_data, crop_info = remove_inactive_borders(self.raw_data, threshold=0)
+
+                # Update image dimensions after cropping
+                self.image_h, self.image_w = self.raw_data.shape
+
+                # Prepare status message with crop info
+                if crop_info and crop_info["rows_removed"] > 0 or crop_info["cols_removed"] > 0:
+                    crop_msg = f" | Cropped: {original_shape[1]}×{original_shape[0]} → {self.image_w}×{self.image_h}"
+                else:
+                    crop_msg = ""
+
                 if self.raw_data.dtype != np.uint8:
                     display_data = (
                         (self.raw_data - self.raw_data.min())
@@ -1905,8 +2096,8 @@ class MainWindow(QMainWindow):
                 else:
                     display_data = self.raw_data
                 self.display_image(display_data)
-                self.ui.label_raw_load.setText(
-                    f"Loaded: {fname} ({w}x{h}, {dtype_choice})"
+                self.statusBar().showMessage(
+                    f"📂 Loaded: {os.path.basename(fname)} ({self.image_w}x{self.image_h}, {dtype_choice}){crop_msg}"
                 )
                 self.add_to_recent_files(fname)
             else:
@@ -1921,18 +2112,34 @@ class MainWindow(QMainWindow):
         if not fname:
             return
 
-        # Auto-detect image dimensions based on file size and filename
         file_size = os.path.getsize(fname)
-        detected_w, detected_h, detected_dtype = self.auto_detect_raw_dimensions(file_size, fname)
-
-        # Auto-apply detected values
-        if detected_w > 0 and detected_h > 0:
-            self.image_w = detected_w
-            self.image_h = detected_h
-
         dtype_options = {"uint8": np.uint8, "uint16": np.uint16, "float32": np.float32}
-        dtype_choice = detected_dtype if detected_dtype in dtype_options else "uint16"
-        selected_dtype = dtype_options[dtype_choice]
+
+        # Check if manual format is selected (index > 0)
+        if self.selected_raw_format_index > 0:
+            # Use manually selected format
+            format_data = self.ui.raw_format_combo.itemData(self.selected_raw_format_index)
+            if format_data:
+                w, h, bpp, dtype_name = format_data
+                self.image_w = w
+                self.image_h = h
+                dtype_choice = dtype_name
+            else:
+                # Fallback to auto-detect
+                detected_w, detected_h, detected_dtype = self.auto_detect_raw_dimensions(file_size, fname)
+                if detected_w > 0 and detected_h > 0:
+                    self.image_w = detected_w
+                    self.image_h = detected_h
+                dtype_choice = detected_dtype if detected_dtype in dtype_options else "uint16"
+        else:
+            # Auto-detect mode
+            detected_w, detected_h, detected_dtype = self.auto_detect_raw_dimensions(file_size, fname)
+            if detected_w > 0 and detected_h > 0:
+                self.image_w = detected_w
+                self.image_h = detected_h
+            dtype_choice = detected_dtype if detected_dtype in dtype_options else "uint16"
+
+        selected_dtype = dtype_options.get(dtype_choice, np.uint16)
 
         try:
             # Use the improved read_raw_image function
@@ -1942,6 +2149,20 @@ class MainWindow(QMainWindow):
 
             if self.raw_data is not None:
                 self.current_image_path = fname  # Track current loaded image
+
+                # Remove inactive borders (black edges)
+                original_shape = self.raw_data.shape
+                self.raw_data, crop_info = remove_inactive_borders(self.raw_data, threshold=0)
+
+                # Update image dimensions after cropping
+                self.image_h, self.image_w = self.raw_data.shape
+
+                # Prepare status message with crop info
+                if crop_info and (crop_info["rows_removed"] > 0 or crop_info["cols_removed"] > 0):
+                    crop_msg = f" | Cropped: {original_shape[1]}×{original_shape[0]} → {self.image_w}×{self.image_h}"
+                else:
+                    crop_msg = ""
+
                 # Normalize to 8-bit for display if necessary
                 if self.raw_data.dtype != np.uint8:
                     display_data = (
@@ -1953,8 +2174,8 @@ class MainWindow(QMainWindow):
                     display_data = self.raw_data
 
                 self.display_image(display_data)
-                self.ui.label_raw_load.setText(
-                    f"Loaded: {fname} ({self.image_w}x{self.image_h}, {dtype_choice})"
+                self.statusBar().showMessage(
+                    f"📂 Loaded: {os.path.basename(fname)} ({self.image_w}x{self.image_h}, {dtype_choice}){crop_msg}"
                 )
                 self.add_to_recent_files(fname)
             else:
