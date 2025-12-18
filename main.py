@@ -460,6 +460,7 @@ class SFRCalculator:
         compensate_bias=True,
         compensate_noise=True,
         lsf_smoothing_method="savgol",
+        supersampling_factor=4,
     ):
         """
         計算 SFR (Spatial Frequency Response) - ISO 12233:2023 Standard with Compensation & LSF Smoothing
@@ -481,6 +482,7 @@ class SFRCalculator:
           * "butterworth": Butterworth IIR 濾波 (頻率域控制)
           * "wiener": Wiener 自適應濾波 (噪聲自適應)
           * "none": 不進行 LSF 平滑
+        - supersampling_factor: 超採樣因子 (預設 4, 範圍 1-16)
 
         Returns:
         - frequencies: 頻率陣列 (cycles/pixel)
@@ -541,12 +543,12 @@ class SFRCalculator:
         if edge_type == "V-Edge":
             # 垂直邊：對寬度方向進行分析
             esf_raw = np.mean(img, axis=0)
-            # 使用立方插值進行 4x 超採樣
+            # 使用立方插值進行超採樣
             from scipy.interpolate import interp1d
 
             x_orig = np.arange(len(esf_raw))
             f_cubic = interp1d(x_orig, esf_raw, kind="cubic", fill_value="extrapolate")
-            x_new = np.linspace(0, len(esf_raw) - 1, (len(esf_raw) - 1) * 4 + 1)
+            x_new = np.linspace(0, len(esf_raw) - 1, (len(esf_raw) - 1) * supersampling_factor + 1)
             esf = f_cubic(x_new)
         else:  # H-Edge
             # 水平邊：對高度方向進行分析
@@ -555,7 +557,7 @@ class SFRCalculator:
 
             x_orig = np.arange(len(esf_raw))
             f_cubic = interp1d(x_orig, esf_raw, kind="cubic", fill_value="extrapolate")
-            x_new = np.linspace(0, len(esf_raw) - 1, (len(esf_raw) - 1) * 4 + 1)
+            x_new = np.linspace(0, len(esf_raw) - 1, (len(esf_raw) - 1) * supersampling_factor + 1)
             esf = f_cubic(x_new)
 
         # Step 2: 亞像素邊緣位置檢測與對齐 (ISO 12233:2023 Section 7.2)
@@ -619,14 +621,15 @@ class SFRCalculator:
             print("Warning: LSF sum is too small for meaningful FFT")
             return None, None, esf, lsf
 
-        # 使用 4x 補零以改善頻率解析度
+        # 使用超採樣因子補零以改善頻率解析度
         n_fft = len(lsf_windowed)
-        n_fft_padded = n_fft * SUPERSAMPLING_FACTOR
+        n_fft_padded = n_fft * supersampling_factor
         fft_res = np.abs(fftpack.fft(lsf_windowed, n=n_fft_padded))
 
         # Step 6: 頻率軸計算與歸一化 (ISO 12233:2023)
-        # 考慮超採樣因子（4x），頻率軸需要相應調整
-        freqs = fftpack.fftfreq(n_fft_padded, d=0.25)  # 0.25 是超採樣後的像素間距
+        # 考慮超採樣因子，頻率軸需要相應調整
+        # d = 1/supersampling_factor 是超採樣後的像素間距
+        freqs = fftpack.fftfreq(n_fft_padded, d=1.0/supersampling_factor)
 
         # 只取正頻率部分
         n_half = len(freqs) // 2
@@ -648,9 +651,9 @@ class SFRCalculator:
 
         # Step 7: 返回結果
         # 轉換頻率回到原始像素空間（考慮超採樣）
-        # Note: Frequency scaling is already handled in fftfreq with d=0.25
-        # No additional division by 4 is needed here to avoid double compensation
-        frequencies = frequencies / SUPERSAMPLING_FACTOR
+        # Note: Frequency scaling is already handled in fftfreq with d=1/supersampling_factor
+        # No additional division is needed here to avoid double compensation
+        frequencies = frequencies / supersampling_factor
 
         # 限制頻率範圍到 Nyquist 頻率 (0.5 cycles/pixel)
         valid_idx = frequencies <= 0.5
@@ -769,7 +772,7 @@ class ImageLabel(QLabel):
                 # Show info - position only, no SFR in plan mode
                 if self.parent_window:
                     total = len(self.roi_markers)
-                    self.parent_window.ui.info_label.setText(
+                    self.parent_window.statusBar().showMessage(
                         f"📍 {roi_name} placed at ({x},{y}) {w}×{h} | Total: {total} ROI(s) - Click to add more"
                     )
             return
@@ -1139,6 +1142,9 @@ class MainWindow(QMainWindow):
         # SFR stabilize filter enable/disable
         self.sfr_stabilize_enabled = False  # Default: disabled
 
+        # Supersampling factor for SFR calculation (1-16x, default 4x)
+        self.supersampling_factor = 4  # Default: 4x
+
         # View mode: "sfr" for SFR analysis or "view" for panning
         self.view_mode = "sfr"  # Default: SFR mode
 
@@ -1188,6 +1194,7 @@ class MainWindow(QMainWindow):
         self.ui.btn_view_mode.clicked.connect(self.on_view_mode_clicked)
         self.ui.method_combo.currentTextChanged.connect(self.on_smoothing_method_changed)
         self.ui.stabilize_checkbox.stateChanged.connect(self.on_stabilize_filter_changed)
+        self.ui.supersampling_spinbox.valueChanged.connect(self.on_supersampling_changed)
         self.ui.edge_detect_checkbox.stateChanged.connect(self.on_edge_detect_changed)
         self.ui.edge_threshold_slider.valueChanged.connect(self.on_edge_threshold_changed)
         self.ui.btn_apply_edge.clicked.connect(self.on_apply_edge)
@@ -1337,7 +1344,7 @@ class MainWindow(QMainWindow):
         - str: Path to saved .roi file, or None on failure
         """
         if self.current_image_path is None:
-            self.ui.info_label.setText("⚠️ No image loaded - cannot save ROI")
+            self.statusBar().showMessage("⚠️ No image loaded - cannot save ROI")
             return None
 
         roi_file_path = self.get_roi_file_path()
@@ -1376,11 +1383,11 @@ class MainWindow(QMainWindow):
             # Add to recent ROI files list
             self.add_to_recent_roi_files(roi_file_path)
 
-            self.ui.info_label.setText(f"💾 ROI saved: {os.path.basename(roi_file_path)}")
+            self.statusBar().showMessage(f"💾 ROI saved: {os.path.basename(roi_file_path)}")
             return roi_file_path
 
         except Exception as e:
-            self.ui.info_label.setText(f"❌ Failed to save ROI: {e}")
+            self.statusBar().showMessage(f"❌ Failed to save ROI: {e}")
             print(f"Failed to save ROI file: {e}")
             return None
 
@@ -1399,7 +1406,7 @@ class MainWindow(QMainWindow):
             roi_file_path = self.get_roi_file_path()
 
         if roi_file_path is None or not os.path.exists(roi_file_path):
-            self.ui.info_label.setText("⚠️ No ROI file found for current image")
+            self.statusBar().showMessage("⚠️ No ROI file found for current image")
             return None
 
         try:
@@ -1414,14 +1421,14 @@ class MainWindow(QMainWindow):
             # Store loaded ROI data
             self.current_roi_data = roi_data
 
-            self.ui.info_label.setText(f"📂 ROI loaded: {os.path.basename(roi_file_path)}")
+            self.statusBar().showMessage(f"📂 ROI loaded: {os.path.basename(roi_file_path)}")
             return roi_data
 
         except json.JSONDecodeError as e:
-            self.ui.info_label.setText(f"❌ Invalid ROI file format: {e}")
+            self.statusBar().showMessage(f"❌ Invalid ROI file format: {e}")
             return None
         except Exception as e:
-            self.ui.info_label.setText(f"❌ Failed to load ROI: {e}")
+            self.statusBar().showMessage(f"❌ Failed to load ROI: {e}")
             print(f"Failed to load ROI file: {e}")
             return None
 
@@ -1445,7 +1452,7 @@ class MainWindow(QMainWindow):
             # Multi-ROI config format - apply positions and calculate SFR for current image
             rois = roi_data.get("rois", [])
             if not rois:
-                self.ui.info_label.setText("⚠️ No ROIs found in config file")
+                self.statusBar().showMessage("⚠️ No ROIs found in config file")
                 return False
 
             # Clear existing markers first
@@ -1480,7 +1487,7 @@ class MainWindow(QMainWindow):
             # Update image display
             self.image_label.update()
 
-            self.ui.info_label.setText(
+            self.statusBar().showMessage(
                 f"📂 Applied {valid_count} ROI(s) from config - SFR values calculated for current image"
             )
             return True
@@ -1494,7 +1501,7 @@ class MainWindow(QMainWindow):
 
             # Validate ROI is within current image bounds
             if x + w > self.image_w or y + h > self.image_h:
-                self.ui.info_label.setText("⚠️ ROI coordinates exceed current image dimensions")
+                self.statusBar().showMessage("⚠️ ROI coordinates exceed current image dimensions")
                 return False
 
             # Create QRect and trigger ROI processing
@@ -1510,7 +1517,7 @@ class MainWindow(QMainWindow):
 
             edge_type = roi_data.get("edge_type", "Unknown")
             confidence = roi_data.get("confidence", 0)
-            self.ui.info_label.setText(
+            self.statusBar().showMessage(
                 f"📂 Applied ROI from file: ({x},{y}) {w}×{h} | {edge_type} (Conf: {confidence:.1f}%)"
             )
             return True
@@ -1544,6 +1551,7 @@ class MainWindow(QMainWindow):
                 compensate_bias=True,
                 compensate_noise=True,
                 lsf_smoothing_method=self.lsf_smoothing_method,
+                supersampling_factor=self.supersampling_factor,
             )
             freqs, sfr_values, esf, lsf = result
 
@@ -1630,7 +1638,7 @@ class MainWindow(QMainWindow):
             # Store the selected file path and enable Apply button
             self.loaded_roi_file_path = roi_file_path
             self.ui.btn_roi_map_apply.setEnabled(True)
-            self.ui.info_label.setText(f"📂 ROI file selected: {os.path.basename(roi_file_path)} - Click 'ROI apply' to apply")
+            self.statusBar().showMessage(f"📂 ROI file selected: {os.path.basename(roi_file_path)} - Click 'ROI apply' to apply")
         elif roi_file_path:
             QMessageBox.warning(self, "ROI File Not Found", f"ROI file not found: {roi_file_path}")
             self.recent_roi_files.remove(roi_file_path)
@@ -1654,7 +1662,7 @@ class MainWindow(QMainWindow):
             self.ui.btn_roi_detact.setEnabled(self.edge_overlay_applied and self.locked_edge_mask is not None)
             # Clear all marks when entering plan mode
             self.clear_all_marks()
-            self.ui.info_label.setText("📋 ROI Plan Mode: Pick ROI positions → Save config → Apply to any image")
+            self.statusBar().showMessage("📋 ROI Plan Mode: Pick ROI positions → Save config → Apply to any image")
         else:
             # Disable ROI buttons when ROI Plan Mode is off
             self.ui.btn_roi_detact.setEnabled(False)
@@ -1664,22 +1672,22 @@ class MainWindow(QMainWindow):
             self.ui.btn_roi_manual.setChecked(False)
             # Clear ROI markers from image
             self.clear_roi_markers()
-            self.ui.info_label.setText("📊 ROI Plan Mode: OFF - Ready for SFR measurement")
+            self.statusBar().showMessage("📊 ROI Plan Mode: OFF - Ready for SFR measurement")
 
     def on_roi_detect(self):
         """Handle ROI Detect button - auto-detect edges for ROI placement"""
         if self.raw_data is None:
-            self.ui.info_label.setText("⚠️ Load an image first")
+            self.statusBar().showMessage("⚠️ Load an image first")
             return
         # Clear all marks before detecting
         self.clear_all_marks()
         # TODO: Implement auto-detection of ROI positions based on edge detection
-        self.ui.info_label.setText("🔍 ROI Detect: Auto-detecting edge positions...")
+        self.statusBar().showMessage("🔍 ROI Detect: Auto-detecting edge positions...")
 
     def on_roi_manual(self):
         """Handle ROI Manual button - toggle manual ROI placement mode"""
         if self.raw_data is None:
-            self.ui.info_label.setText("⚠️ Load an image first")
+            self.statusBar().showMessage("⚠️ Load an image first")
             return
 
         # Toggle ROI manual mode
@@ -1691,10 +1699,10 @@ class MainWindow(QMainWindow):
             self.clear_all_marks()
             # Enter ROI plan mode
             self.roi_plan_mode = True
-            self.ui.info_label.setText(f"✋ ROI Manual: Click to place ROI markers (Size: {self.click_select_size}×{self.click_select_size})")
+            self.statusBar().showMessage(f"✋ ROI Manual: Click to place ROI markers (Size: {self.click_select_size}×{self.click_select_size})")
         else:
             num_markers = len(self.roi_markers)
-            self.ui.info_label.setText(f"📋 ROI Manual mode OFF - {num_markers} ROI(s) placed")
+            self.statusBar().showMessage(f"📋 ROI Manual mode OFF - {num_markers} ROI(s) placed")
 
     def clear_roi_markers(self):
         """Clear all ROI markers and visual marks from the image (except the loaded .raw image)"""
@@ -1717,7 +1725,7 @@ class MainWindow(QMainWindow):
             self.ui.btn_roi_map_apply.setEnabled(True)
             # Select the file in combo
             self.ui.recent_roi_combo.setCurrentIndex(1)  # First item after placeholder
-            self.ui.info_label.setText(f"📂 ROI file loaded: {os.path.basename(roi_file)} - Click 'ROI apply' to apply")
+            self.statusBar().showMessage(f"📂 ROI file loaded: {os.path.basename(roi_file)} - Click 'ROI apply' to apply")
 
     def on_roi_map_apply(self):
         """Handle ROI Apply button - apply the loaded ROI config to current image"""
@@ -1732,12 +1740,12 @@ class MainWindow(QMainWindow):
             self.clear_all_marks()
             self.apply_roi_from_file(self.loaded_roi_file_path)
         else:
-            self.ui.info_label.setText("⚠️ No ROI file loaded - use 'Load .roi' first")
+            self.statusBar().showMessage("⚠️ No ROI file loaded - use 'Load .roi' first")
 
     def on_roi_load(self):
         """Handle ROI Load button - load ROI configuration from file"""
         if self.current_image_path is None:
-            self.ui.info_label.setText("⚠️ Load an image first")
+            self.statusBar().showMessage("⚠️ Load an image first")
             return
 
         # Try to load ROI file for current image
@@ -1755,17 +1763,17 @@ class MainWindow(QMainWindow):
     def on_roi_save(self):
         """Handle ROI Save button - save all ROI markers to file"""
         if not self.roi_markers or len(self.roi_markers) == 0:
-            self.ui.info_label.setText("⚠️ No ROI markers to save")
+            self.statusBar().showMessage("⚠️ No ROI markers to save")
             return
 
         if self.current_image_path is None:
-            self.ui.info_label.setText("⚠️ Load an image first")
+            self.statusBar().showMessage("⚠️ Load an image first")
             return
 
         # Save all ROI markers to file
         saved_path = self.save_roi_markers_file()
         if saved_path:
-            self.ui.info_label.setText(f"💾 {len(self.roi_markers)} ROI(s) saved to: {os.path.basename(saved_path)}")
+            self.statusBar().showMessage(f"💾 {len(self.roi_markers)} ROI(s) saved to: {os.path.basename(saved_path)}")
 
     def save_roi_markers_file(self):
         """Save all ROI markers to a .roi JSON file"""
@@ -1822,7 +1830,7 @@ class MainWindow(QMainWindow):
             return roi_file_path
 
         except Exception as e:
-            self.ui.info_label.setText(f"❌ Failed to save ROI: {e}")
+            self.statusBar().showMessage(f"❌ Failed to save ROI: {e}")
             print(f"Failed to save ROI file: {e}")
             return None
 
@@ -2166,7 +2174,7 @@ class MainWindow(QMainWindow):
     def on_smoothing_method_changed(self):
         """Handle LSF smoothing method selection change"""
         self.lsf_smoothing_method = self.ui.method_combo.currentText()
-        self.ui.info_label.setText(
+        self.statusBar().showMessage(
             f"LSF Smoothing Method Changed: {self.lsf_smoothing_method}"
         )
 
@@ -2175,24 +2183,31 @@ class MainWindow(QMainWindow):
         self.sfr_stabilize_enabled = self.ui.stabilize_checkbox.isChecked()
 
         if self.sfr_stabilize_enabled:
-            self.ui.info_label.setText(
+            self.statusBar().showMessage(
                 "✓ SFR Stabilize Filter: ENABLED (will average 3 samples for stability)"
             )
         else:
-            self.ui.info_label.setText(
+            self.statusBar().showMessage(
                 "SFR Stabilize Filter: DISABLED (single measurement)"
             )
+
+    def on_supersampling_changed(self):
+        """Handle supersampling factor spinbox change"""
+        self.supersampling_factor = self.ui.supersampling_spinbox.value()
+        self.statusBar().showMessage(
+            f"Supersampling Factor: {self.supersampling_factor}x (px/cycle ratio maintained)"
+        )
 
     def on_selection_mode_changed(self):
         """Handle selection mode change (Drag vs Click vs ROI map)"""
         if self.ui.radio_drag.isChecked():
             self.selection_mode = "drag"
             self.ui.recent_roi_combo.setEnabled(False)
-            self.ui.info_label.setText("Selection Mode: Drag Select (draw rectangle)")
+            self.statusBar().showMessage("Selection Mode: Drag Select (draw rectangle)")
         elif self.ui.radio_click.isChecked():
             self.selection_mode = "click"
             self.ui.recent_roi_combo.setEnabled(False)
-            self.ui.info_label.setText(
+            self.statusBar().showMessage(
                 f"Selection Mode: Click {self.click_select_size}×{self.click_select_size} (single click to select area)"
             )
         elif self.ui.radio_script_roi.isChecked():
@@ -2200,7 +2215,7 @@ class MainWindow(QMainWindow):
             self.ui.recent_roi_combo.setEnabled(True)
             # Clear all SFR results and marks when entering ROI map mode
             self.clear_all_marks()
-            self.ui.info_label.setText("Selection Mode: ROI map (select from saved ROI config files)")
+            self.statusBar().showMessage("Selection Mode: ROI map (select from saved ROI config files)")
 
     def clear_all_marks(self):
         """Clear all visual marks and SFR results from the image (keep only the loaded .raw image)"""
@@ -2250,7 +2265,7 @@ class MainWindow(QMainWindow):
         )
         # Update status if click mode is active
         if self.ui.radio_click.isChecked():
-            self.ui.info_label.setText(
+            self.statusBar().showMessage(
                 f"Selection Mode: Click {self.click_select_size}×{self.click_select_size} (single click to select area)"
             )
 
@@ -2262,7 +2277,7 @@ class MainWindow(QMainWindow):
 
         # Update the label
         self.ui.ny_freq_value_label.setText(f"{self.ny_frequency:.2f}")
-        self.ui.info_label.setText(f"Nyquist frequency set to {self.ny_frequency:.2f}")
+        self.statusBar().showMessage(f"Nyquist frequency set to {self.ny_frequency:.2f}")
 
         # If we have stored SFR data, re-plot with new Ny frequency
         if hasattr(self, 'last_sfr_data') and self.last_sfr_data is not None:
@@ -2276,14 +2291,14 @@ class MainWindow(QMainWindow):
 
         # If edge is locked (Apply Edge was clicked), don't update - keep locked pattern
         if self.locked_edge_mask is not None:
-            self.ui.info_label.setText(f"🔒 Edge LOCKED - Threshold change ignored (click Erase Edge to unlock)")
+            self.statusBar().showMessage(f"🔒 Edge LOCKED - Threshold change ignored (click Erase Edge to unlock)")
             return
 
         # Update edge display if edge detect is enabled (preview mode only)
         if self.edge_detect_enabled and self.raw_data is not None:
             self.update_edge_display()
         else:
-            self.ui.info_label.setText(f"🔍 Edge Detection Threshold: {self.edge_threshold}")
+            self.statusBar().showMessage(f"🔍 Edge Detection Threshold: {self.edge_threshold}")
 
     def on_edge_detect_changed(self):
         """Handle edge detect checkbox change"""
@@ -2293,23 +2308,23 @@ class MainWindow(QMainWindow):
         if self.locked_edge_mask is not None:
             if self.edge_detect_enabled:
                 self.display_with_locked_edge()
-                self.ui.info_label.setText(f"🔒 Edge LOCKED - Showing fixed reference pattern")
+                self.statusBar().showMessage(f"🔒 Edge LOCKED - Showing fixed reference pattern")
             else:
                 self.show_image_without_edge()
-                self.ui.info_label.setText("❌ Edge Detect: OFF (locked pattern still saved)")
+                self.statusBar().showMessage("❌ Edge Detect: OFF (locked pattern still saved)")
             return
 
         if self.edge_detect_enabled:
             if self.raw_data is not None:
                 self.update_edge_display()
-                self.ui.info_label.setText(f"✅ Edge Detect: ON (Threshold: {self.edge_threshold})")
+                self.statusBar().showMessage(f"✅ Edge Detect: ON (Threshold: {self.edge_threshold})")
             else:
-                self.ui.info_label.setText("⚠️ Load an image first to see edge detection")
+                self.statusBar().showMessage("⚠️ Load an image first to see edge detection")
         else:
             # Restore original image
             if self.display_data is not None:
                 self.show_image_without_edge()
-            self.ui.info_label.setText("❌ Edge Detect: OFF")
+            self.statusBar().showMessage("❌ Edge Detect: OFF")
 
     def update_edge_display(self):
         """Update the image display with thin edge overlay using Canny"""
@@ -2351,7 +2366,7 @@ class MainWindow(QMainWindow):
         # Count edge pixels
         edge_count = np.sum(edge_mask)
         edge_percent = edge_count / (h * w) * 100
-        self.ui.info_label.setText(f"🔍 Edge Detect: {edge_count} pixels ({edge_percent:.1f}%) | Threshold: {self.edge_threshold}")
+        self.statusBar().showMessage(f"🔍 Edge Detect: {edge_count} pixels ({edge_percent:.1f}%) | Threshold: {self.edge_threshold}")
 
     def show_image_without_edge(self):
         """Restore original grayscale image without edge overlay"""
@@ -2369,7 +2384,7 @@ class MainWindow(QMainWindow):
     def on_apply_edge(self):
         """Apply and LOCK edge overlay - edge pattern becomes fixed reference"""
         if self.raw_data is None:
-            self.ui.info_label.setText("⚠️ Load an image first")
+            self.statusBar().showMessage("⚠️ Load an image first")
             return
 
         # Calculate and lock the edge pattern
@@ -2388,12 +2403,12 @@ class MainWindow(QMainWindow):
 
         # Display with locked edge
         self.display_with_locked_edge()
-        self.ui.info_label.setText(f"🔒 Edge LOCKED (Threshold: {self.edge_threshold}) - Pattern fixed as reference")
+        self.statusBar().showMessage(f"🔒 Edge LOCKED (Threshold: {self.edge_threshold}) - Pattern fixed as reference")
 
     def on_erase_edge(self):
         """Remove edge overlay from the image display and clear locked pattern"""
         if self.display_data is None:
-            self.ui.info_label.setText("⚠️ No image loaded")
+            self.statusBar().showMessage("⚠️ No image loaded")
             return
 
         self.ui.edge_detect_checkbox.setChecked(False)
@@ -2405,7 +2420,7 @@ class MainWindow(QMainWindow):
         self.ui.btn_roi_detact.setEnabled(False)
 
         self.show_image_without_edge()
-        self.ui.info_label.setText("🧹 Edge Erased - Locked pattern cleared")
+        self.statusBar().showMessage("🧹 Edge Erased - Locked pattern cleared")
 
     def display_with_locked_edge(self):
         """Display current image with the locked edge pattern overlay"""
@@ -2444,7 +2459,7 @@ class MainWindow(QMainWindow):
         self.ui.btn_view_mode.setChecked(False)
         # Reset cursor to arrow
         self.image_label.setCursor(Qt.ArrowCursor)
-        self.ui.info_label.setText("📊 SFR Mode: Click or drag to select ROI for analysis")
+        self.statusBar().showMessage("📊 SFR Mode: Click or drag to select ROI for analysis")
 
     def on_view_mode_clicked(self):
         """Switch to VIEW (panning) mode"""
@@ -2453,7 +2468,7 @@ class MainWindow(QMainWindow):
         self.ui.btn_view_mode.setChecked(True)
         # Set cursor to open hand
         self.image_label.setCursor(Qt.OpenHandCursor)
-        self.ui.info_label.setText("🖐 VIEW Mode: Click and drag to pan the image")
+        self.statusBar().showMessage("🖐 VIEW Mode: Click and drag to pan the image")
 
     def process_roi(self, rect):
         """處理使用者選取的區域 with optional stabilize filter"""
@@ -2474,7 +2489,7 @@ class MainWindow(QMainWindow):
             # Detect edge type for display only
             is_edge, msg, edge_type, confidence = SFRCalculator.validate_edge(roi, threshold=self.edge_threshold)
             if is_edge:
-                self.ui.info_label.setText(
+                self.statusBar().showMessage(
                     f"📋 ROI Plan Mode: ({x},{y}) {w}×{h} | {edge_type} (Conf: {confidence:.1f}%) - SFR paused"
                 )
                 # Store ROI data for potential save
@@ -2484,7 +2499,7 @@ class MainWindow(QMainWindow):
                     "confidence": confidence
                 }
             else:
-                self.ui.info_label.setText(
+                self.statusBar().showMessage(
                     f"📋 ROI Plan Mode: ({x},{y}) {w}×{h} | No edge detected - SFR paused"
                 )
             return  # Skip SFR calculation
@@ -2502,13 +2517,13 @@ class MainWindow(QMainWindow):
         if is_edge:
             if self.sfr_stabilize_enabled:
                 # Stabilize filter: Average multiple samples
-                self.ui.info_label.setText(
+                self.statusBar().showMessage(
                     f"Edge Detected: {edge_type} - Collecting {3} samples for stability..."
                 )
                 self.process_roi_with_stabilize(std_roi, edge_type, x, y, w, h)
             else:
                 # Normal single measurement
-                self.ui.info_label.setText(
+                self.statusBar().showMessage(
                     f"Edge Detected: {edge_type} (Confidence: {confidence:.1f}%) - Calculating SFR..."
                 )
                 # 5. Input to SFR Algo with edge type and compensation enabled (using standardized ROI)
@@ -2518,6 +2533,7 @@ class MainWindow(QMainWindow):
                     compensate_bias=True,
                     compensate_noise=True,
                     lsf_smoothing_method=self.lsf_smoothing_method,
+                    supersampling_factor=self.supersampling_factor,
                 )
                 freqs, sfr_values, esf, lsf = result
 
@@ -2533,13 +2549,13 @@ class MainWindow(QMainWindow):
 
                     mtf50_idx = np.argmin(np.abs(sfr_values - 0.5))
                     mtf50_val = freqs[mtf50_idx] if mtf50_idx < len(freqs) else 0
-                    self.ui.info_label.setText(
+                    self.statusBar().showMessage(
                         f"{edge_type} Edge (Conf: {confidence:.1f}%) | MTF50: {mtf50_val:.3f} cy/px | SFR@ny/4: {sfr_at_ny4:.4f} | SFR Calculated (LSF-{self.lsf_smoothing_method})"
                     )
                 else:
-                    self.ui.info_label.setText("Error in SFR Calculation")
+                    self.statusBar().showMessage("Error in SFR Calculation")
         else:
-            self.ui.info_label.setText(f"Detection Failed: {msg}")
+            self.statusBar().showMessage(f"Detection Failed: {msg}")
             self.ax_esf.clear()
             self.ax_lsf.clear()
             self.ax_sfr.clear()
@@ -2582,6 +2598,7 @@ class MainWindow(QMainWindow):
                     compensate_bias=True,
                     compensate_noise=True,
                     lsf_smoothing_method=self.lsf_smoothing_method,
+                    supersampling_factor=self.supersampling_factor,
                 )
                 freqs, sfr_values, esf, lsf = result
 
@@ -2590,7 +2607,7 @@ class MainWindow(QMainWindow):
                     esf_samples.append(esf)
                     lsf_samples.append(lsf)
                     valid_samples += 1
-                    self.ui.info_label.setText(
+                    self.statusBar().showMessage(
                         f"Collecting samples... {valid_samples}/{num_samples}"
                     )
 
@@ -2636,12 +2653,12 @@ class MainWindow(QMainWindow):
             mtf50_idx = np.argmin(np.abs(sfr_averaged - 0.5))
             mtf50_val = freqs[mtf50_idx] if mtf50_idx < len(freqs) else 0
 
-            self.ui.info_label.setText(
+            self.statusBar().showMessage(
                 f"{edge_type} Edge | MTF50: {mtf50_val:.3f} cy/px | Stability: ±{stability*100:.2f}% | "
                 f"Samples: {valid_samples}/{num_samples} | SFR Calculated (✓ STABILIZED)"
             )
         else:
-            self.ui.info_label.setText(f"Error: Could not collect valid edge samples")
+            self.statusBar().showMessage(f"Error: Could not collect valid edge samples")
 
 
     def plot_sfr(self, frequencies, sfr_values, esf, lsf, edge_type="V-Edge", roi_image=None):
@@ -2651,13 +2668,13 @@ class MainWindow(QMainWindow):
         Parameters:
         - frequencies: Frequency array for SFR plot (already compensated for supersampling)
         - sfr_values: SFR/MTF values corresponding to frequencies
-        - esf: Edge Spread Function (4x oversampled)
+        - esf: Edge Spread Function (oversampled)
         - lsf: Line Spread Function
         - edge_type: "V-Edge" or "H-Edge"
         - roi_image: ROI image array to display (optional)
         """
-        # Supersampling factor used in ISO 12233:2023
-        SUPERSAMPLING_FACTOR = 4
+        # Use instance supersampling factor
+        supersampling_factor = self.supersampling_factor
 
         # Clear all subplots
         self.ax_esf.clear()
@@ -2674,13 +2691,13 @@ class MainWindow(QMainWindow):
         self.ax_roi.axis('off')
 
         # Plot 1: ESF (Edge Spread Function)
-        # Note: ESF is 4x oversampled, so we need to account for that in x-axis
+        # Note: ESF is oversampled, so we need to account for that in x-axis
         esf_x = (
-            np.arange(len(esf)) / SUPERSAMPLING_FACTOR
+            np.arange(len(esf)) / supersampling_factor
         )  # Scale back to original pixel coordinates
         self.ax_esf.plot(esf_x, esf, "b-", linewidth=2)
         self.ax_esf.set_title(
-            "ESF (Edge Spread Function) - 4x Oversampled",
+            f"ESF (Edge Spread Function) - {supersampling_factor}x Oversampled",
             fontsize=10,
             fontweight="bold",
         )
@@ -2690,7 +2707,7 @@ class MainWindow(QMainWindow):
 
         # Plot 2: LSF (Line Spread Function)
         lsf_x = (
-            np.arange(len(lsf)) / SUPERSAMPLING_FACTOR
+            np.arange(len(lsf)) / supersampling_factor
         )  # Scale back to original pixel coordinates
 
         # If peak is on negative side, invert the LSF
