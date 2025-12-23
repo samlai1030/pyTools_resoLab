@@ -460,7 +460,7 @@ class Ui_MainWindow(object):
         _translate = QtCore.QCoreApplication.translate
         MainWindow.setWindowTitle(_translate("MainWindow", "pyTools_ResoLab"))
         self.file_group_box.setTitle(_translate("MainWindow", "File"))
-        self.btn_load.setText(_translate("MainWindow", "Load .raw"))
+        self.btn_load.setText(_translate("MainWindow", "Load Image"))
         self.recent_files_combo.setToolTip(_translate("MainWindow", "Recent Files"))
         self.label_raw_format.setText(_translate("MainWindow", "Format:"))
         self.raw_format_combo.setToolTip(_translate("MainWindow", "Select raw image format (Auto-detect or manual selection)"))

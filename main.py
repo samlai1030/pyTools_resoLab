@@ -2035,6 +2035,12 @@ class MainWindow(QMainWindow):
         if not fname:
             return
 
+        # Check file extension to determine loading method
+        ext = os.path.splitext(fname)[1].lower()
+        if ext in ['.bmp', '.png', '.jpg', '.jpeg', '.tif', '.tiff']:
+            self.load_standard_image_file(fname)
+            return
+
         file_size = os.path.getsize(fname)
         dtype_options = {"uint8": np.uint8, "uint16": np.uint16, "float32": np.float32}
 
@@ -2103,11 +2109,90 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error reading raw file: {str(e)}")
 
+    def load_standard_image_file(self, fname):
+        """
+        Load standard image formats (BMP, PNG, JPG, TIFF, etc.) using OpenCV.
+
+        Parameters:
+        - fname: Path to the image file
+        """
+        try:
+            # Load image using OpenCV (supports BMP, PNG, JPG, TIFF, etc.)
+            # Use IMREAD_UNCHANGED to preserve bit depth
+            img = cv2.imread(fname, cv2.IMREAD_UNCHANGED)
+
+            if img is None:
+                QMessageBox.critical(self, "Error", f"Failed to read image file: {fname}")
+                return
+
+            # Convert color images to grayscale for SFR analysis
+            if len(img.shape) == 3:
+                if img.shape[2] == 4:  # BGRA
+                    img = cv2.cvtColor(img, cv2.COLOR_BGRA2GRAY)
+                elif img.shape[2] == 3:  # BGR
+                    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+            self.raw_data = img
+            self.current_image_path = fname
+
+            # Get original shape before potential cropping
+            original_shape = self.raw_data.shape
+
+            # Remove inactive borders (black edges)
+            self.raw_data, crop_info = remove_inactive_borders(self.raw_data, threshold=0)
+
+            # Update image dimensions
+            self.image_h, self.image_w = self.raw_data.shape
+
+            # Prepare status message with crop info
+            if crop_info and (crop_info["rows_removed"] > 0 or crop_info["cols_removed"] > 0):
+                crop_msg = f" | Cropped: {original_shape[1]}×{original_shape[0]} → {self.image_w}×{self.image_h}"
+            else:
+                crop_msg = ""
+
+            # Determine bit depth for display
+            if self.raw_data.dtype == np.uint8:
+                dtype_str = "8-bit"
+                display_data = self.raw_data
+            elif self.raw_data.dtype == np.uint16:
+                dtype_str = "16-bit"
+                # Normalize 16-bit to 8-bit for display
+                display_data = (
+                    (self.raw_data - self.raw_data.min())
+                    / (self.raw_data.max() - self.raw_data.min() + 1e-10)
+                    * 255
+                ).astype(np.uint8)
+            else:
+                dtype_str = str(self.raw_data.dtype)
+                # Normalize to 8-bit for display
+                display_data = (
+                    (self.raw_data - self.raw_data.min())
+                    / (self.raw_data.max() - self.raw_data.min() + 1e-10)
+                    * 255
+                ).astype(np.uint8)
+
+            self.display_image(display_data)
+
+            ext = os.path.splitext(fname)[1].upper()
+            self.statusBar().showMessage(
+                f"📂 Loaded: {os.path.basename(fname)} ({self.image_w}×{self.image_h}, {dtype_str}{ext}){crop_msg}"
+            )
+            self.add_to_recent_files(fname)
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Error reading image file: {str(e)}")
+
     def load_raw_file(self):
         fname, _ = QFileDialog.getOpenFileName(
-            self, "Open Raw File", "", "Raw Files (*.raw);;All Files (*)"
+            self, "Open Image File", "", "Image Files (*.raw *.bmp *.png *.jpg *.jpeg *.tif *.tiff);;Raw Files (*.raw);;BMP Files (*.bmp);;All Files (*)"
         )
         if not fname:
+            return
+
+        # Check file extension to determine loading method
+        ext = os.path.splitext(fname)[1].lower()
+        if ext in ['.bmp', '.png', '.jpg', '.jpeg', '.tif', '.tiff']:
+            self.load_standard_image_file(fname)
             return
 
         file_size = os.path.getsize(fname)
