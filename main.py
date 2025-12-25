@@ -1,9 +1,11 @@
+import json
 import os
 import sys
-import json
 
 import cv2
 import numpy as np
+
+from mainUI import Ui_MainWindow
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from PyQt5.QtCore import QRect, Qt
@@ -29,8 +31,6 @@ from PyQt5.QtWidgets import (
 from scipy import fftpack
 from scipy.ndimage import gaussian_filter, gaussian_filter1d, uniform_filter1d
 from scipy.signal import butter, filtfilt, medfilt, savgol_filter, wiener
-
-from mainUI import Ui_MainWindow
 
 
 # Constants
@@ -186,7 +186,7 @@ def remove_inactive_borders(image, threshold=0):
             "crop_left": 0,
             "crop_right": 0,
             "rows_removed": 0,
-            "cols_removed": 0
+            "cols_removed": 0,
         }
 
     row_start, row_end = active_rows[0], active_rows[-1] + 1
@@ -202,7 +202,7 @@ def remove_inactive_borders(image, threshold=0):
         "crop_left": col_start,
         "crop_right": original_shape[1] - col_end,
         "rows_removed": original_shape[0] - cropped.shape[0],
-        "cols_removed": original_shape[1] - cropped.shape[1]
+        "cols_removed": original_shape[1] - cropped.shape[1],
     }
 
     return cropped, crop_info
@@ -449,7 +449,9 @@ class SFRCalculator:
         gray_for_analysis = get_gray(img)
 
         # Step 1: Detect current edge orientation
-        edge_type, confidence, details = SFRCalculator.detect_edge_orientation(gray_for_analysis)
+        edge_type, confidence, details = SFRCalculator.detect_edge_orientation(
+            gray_for_analysis
+        )
 
         # Step 2: If horizontal edge, rotate 90 degrees counter-clockwise to make it vertical
         if edge_type == "H-Edge":
@@ -458,7 +460,9 @@ class SFRCalculator:
             gray_for_analysis = get_gray(img)
 
             # Re-detect orientation after rotation (should now be V-Edge)
-            edge_type, confidence, details = SFRCalculator.detect_edge_orientation(gray_for_analysis)
+            edge_type, confidence, details = SFRCalculator.detect_edge_orientation(
+                gray_for_analysis
+            )
 
         # Step 3: Ensure dark side is on left, bright side is on right
         h, w = gray_for_analysis.shape[:2]
@@ -509,7 +513,9 @@ class SFRCalculator:
             gray_for_analysis = get_gray(img)
 
         # Final edge detection for confidence
-        edge_type, confidence, details = SFRCalculator.detect_edge_orientation(gray_for_analysis)
+        edge_type, confidence, details = SFRCalculator.detect_edge_orientation(
+            gray_for_analysis
+        )
 
         return img, edge_type, confidence
 
@@ -608,7 +614,9 @@ class SFRCalculator:
 
             x_orig = np.arange(len(esf_raw))
             f_cubic = interp1d(x_orig, esf_raw, kind="cubic", fill_value="extrapolate")
-            x_new = np.linspace(0, len(esf_raw) - 1, (len(esf_raw) - 1) * supersampling_factor + 1)
+            x_new = np.linspace(
+                0, len(esf_raw) - 1, (len(esf_raw) - 1) * supersampling_factor + 1
+            )
             esf = f_cubic(x_new)
         else:  # H-Edge
             # 水平邊：對高度方向進行分析
@@ -617,7 +625,9 @@ class SFRCalculator:
 
             x_orig = np.arange(len(esf_raw))
             f_cubic = interp1d(x_orig, esf_raw, kind="cubic", fill_value="extrapolate")
-            x_new = np.linspace(0, len(esf_raw) - 1, (len(esf_raw) - 1) * supersampling_factor + 1)
+            x_new = np.linspace(
+                0, len(esf_raw) - 1, (len(esf_raw) - 1) * supersampling_factor + 1
+            )
             esf = f_cubic(x_new)
 
         # Step 2: 亞像素邊緣位置檢測與對齐 (ISO 12233:2023 Section 7.2)
@@ -689,7 +699,7 @@ class SFRCalculator:
         # Step 6: 頻率軸計算與歸一化 (ISO 12233:2023)
         # 考慮超採樣因子，頻率軸需要相應調整
         # d = 1/supersampling_factor 是超採樣後的像素間距
-        freqs = fftpack.fftfreq(n_fft_padded, d=1.0/supersampling_factor)
+        freqs = fftpack.fftfreq(n_fft_padded, d=1.0 / supersampling_factor)
 
         # 只取正頻率部分
         n_half = len(freqs) // 2
@@ -780,19 +790,29 @@ class ImageLabel(QLabel):
                 self.is_panning = True
                 self.pan_start_pos = event.pos()
                 if self.scroll_area:
-                    self.pan_scroll_start_h = self.scroll_area.horizontalScrollBar().value()
-                    self.pan_scroll_start_v = self.scroll_area.verticalScrollBar().value()
+                    self.pan_scroll_start_h = (
+                        self.scroll_area.horizontalScrollBar().value()
+                    )
+                    self.pan_scroll_start_v = (
+                        self.scroll_area.verticalScrollBar().value()
+                    )
                 self.setCursor(Qt.ClosedHandCursor)
             return
 
         # Check if ROI Manual Mode is active - places multiple ROI markers (position picking only, no SFR calc)
-        if self.parent_window and hasattr(self.parent_window, "roi_manual_mode") and self.parent_window.roi_manual_mode:
+        if (
+            self.parent_window
+            and hasattr(self.parent_window, "roi_manual_mode")
+            and self.parent_window.roi_manual_mode
+        ):
             if event.button() == Qt.LeftButton:
                 click_pos = event.pos()
 
                 # Get size from parent window (same as click select size)
                 size = 40
-                if self.parent_window and hasattr(self.parent_window, "click_select_size"):
+                if self.parent_window and hasattr(
+                    self.parent_window, "click_select_size"
+                ):
                     size = self.parent_window.click_select_size
 
                 half_size = size // 2
@@ -918,7 +938,9 @@ class ImageLabel(QLabel):
 
     def mouseReleaseEvent(self, event):
         # Check if releasing from panning (right-click or left-click in VIEW mode)
-        if (event.button() == Qt.RightButton or event.button() == Qt.LeftButton) and self.is_panning:
+        if (
+            event.button() == Qt.RightButton or event.button() == Qt.LeftButton
+        ) and self.is_panning:
             self.is_panning = False
             self.pan_start_pos = None
             # Restore cursor based on view mode
@@ -1006,13 +1028,14 @@ class ImageLabel(QLabel):
 
             # Convert to display coordinates with zoom
             roi_top_left_x = int(x * self.zoom_level)
-            roi_top_left_y = int((y + 5)  * self.zoom_level)
+            roi_top_left_y = int((y + 5) * self.zoom_level)
 
             # Prepare SFR text (show as percentage with 2 decimal places)
             sfr_text = f"{self.roi_sfr_value*100:.2f}%"
 
             # Setup font for text
             from PyQt5.QtGui import QFont
+
             font = QFont("Arial", 12)
             font.setBold(True)
             painter.setFont(font)
@@ -1027,8 +1050,9 @@ class ImageLabel(QLabel):
             text_y = roi_top_left_y + text_height + 5
 
             # Draw semi-transparent background box
-            bg_rect = QRect(text_x - 3, text_y - text_height - 2,
-                           text_width + 6, text_height + 4)
+            bg_rect = QRect(
+                text_x - 3, text_y - text_height - 2, text_width + 6, text_height + 4
+            )
 
             # Draw background (semi-transparent black)
             painter.fillRect(bg_rect, QColor(0, 0, 0, 200))
@@ -1044,6 +1068,7 @@ class ImageLabel(QLabel):
         # Draw ROI markers (for ROI Manual mode and loaded ROIs)
         if self.roi_markers:
             from PyQt5.QtGui import QFont
+
             font = QFont("Arial", 10)
             font.setBold(True)
             painter.setFont(font)
@@ -1090,8 +1115,9 @@ class ImageLabel(QLabel):
                 text_y = disp_y + line_height + 2
 
                 # Draw semi-transparent background for label
-                bg_rect = QRect(text_x - 2, disp_y + 2,
-                               max_text_width + 6, total_height + 4)
+                bg_rect = QRect(
+                    text_x - 2, disp_y + 2, max_text_width + 6, total_height + 4
+                )
                 painter.fillRect(bg_rect, QColor(255, 0, 0, 200))  # Red background
 
                 # Draw first line (ROI name)
@@ -1250,7 +1276,6 @@ class MainWindow(QMainWindow):
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
 
-
         # Data
         self.raw_data = None
         self.display_data = None  # Store display data for edge overlay
@@ -1291,7 +1316,9 @@ class MainWindow(QMainWindow):
         # Edge detection display mode
         self.edge_detect_enabled = False  # Show edge overlay on image
         self.edge_overlay_applied = False  # Track if edge overlay is applied
-        self.locked_edge_mask = None  # Store locked edge pattern (frozen when Apply Edge clicked)
+        self.locked_edge_mask = (
+            None  # Store locked edge pattern (frozen when Apply Edge clicked)
+        )
 
         # Nyquist frequency (0.1 to 1.0)
         self.ny_frequency = 0.5
@@ -1325,14 +1352,23 @@ class MainWindow(QMainWindow):
         self.ui.recent_roi_combo.activated.connect(self.on_recent_roi_selected)
         self.ui.btn_sfr_mode.clicked.connect(self.on_sfr_mode_clicked)
         self.ui.btn_view_mode.clicked.connect(self.on_view_mode_clicked)
-        self.ui.method_combo.currentTextChanged.connect(self.on_smoothing_method_changed)
-        self.ui.stabilize_checkbox.stateChanged.connect(self.on_stabilize_filter_changed)
-        self.ui.supersampling_spinbox.valueChanged.connect(self.on_supersampling_changed)
+        self.ui.btn_save_png.clicked.connect(self.on_save_png_clicked)
+        self.ui.method_combo.currentTextChanged.connect(
+            self.on_smoothing_method_changed
+        )
+        self.ui.stabilize_checkbox.stateChanged.connect(
+            self.on_stabilize_filter_changed
+        )
+        self.ui.supersampling_spinbox.valueChanged.connect(
+            self.on_supersampling_changed
+        )
         self.ui.edge_detect_checkbox.stateChanged.connect(self.on_edge_detect_changed)
 
         # Initialize raw format combobox with options from RAW_FORMAT_OPTIONS
         self.init_raw_format_combo()
-        self.ui.edge_threshold_slider.valueChanged.connect(self.on_edge_threshold_changed)
+        self.ui.edge_threshold_slider.valueChanged.connect(
+            self.on_edge_threshold_changed
+        )
         self.ui.btn_apply_edge.clicked.connect(self.on_apply_edge)
         self.ui.btn_erase_edge.clicked.connect(self.on_erase_edge)
         self.ui.ny_freq_slider.valueChanged.connect(self.on_ny_freq_slider_changed)
@@ -1369,7 +1405,6 @@ class MainWindow(QMainWindow):
         # Track loaded ROI file path
         self.loaded_roi_file_path = None
 
-
     def init_plots(self):
         self.figure = Figure(dpi=100)
         self.figure.patch.set_facecolor("white")
@@ -1377,6 +1412,7 @@ class MainWindow(QMainWindow):
 
         # Set size policy to allow the canvas to shrink/expand properly
         from PyQt5.QtWidgets import QSizePolicy
+
         self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.canvas.updateGeometry()
 
@@ -1386,8 +1422,9 @@ class MainWindow(QMainWindow):
         canvas_layout.addWidget(self.canvas)
 
         # Set the placeholder to expand properly with max width
-        self.ui.canvas_placeholder.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-
+        self.ui.canvas_placeholder.setSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Expanding
+        )
 
         # 2x2 subplot layout:
         # (0,0) = SFR/MTF  |  (0,1) = ROI Image
@@ -1403,7 +1440,7 @@ class MainWindow(QMainWindow):
         self.ax_sfr.grid(True, alpha=0.3)
 
         self.ax_roi.set_title("ROI Image", fontsize=10, fontweight="bold")
-        self.ax_roi.axis('off')  # Hide axes for image display
+        self.ax_roi.axis("off")  # Hide axes for image display
 
         self.ax_esf.set_title(
             "ESF (Edge Spread Function)", fontsize=10, fontweight="bold"
@@ -1422,7 +1459,7 @@ class MainWindow(QMainWindow):
         self.figure.tight_layout()
 
         # Connect resize event to update figure layout
-        self.canvas.mpl_connect('resize_event', self.on_canvas_resize)
+        self.canvas.mpl_connect("resize_event", self.on_canvas_resize)
 
     def on_canvas_resize(self, event):
         """Handle canvas resize to maintain proper figure layout"""
@@ -1431,7 +1468,6 @@ class MainWindow(QMainWindow):
             self.canvas.draw_idle()
         except Exception:
             pass  # Ignore errors during resize
-
 
     def closeEvent(self, event):
         self.save_recent_files()
@@ -1466,7 +1502,9 @@ class MainWindow(QMainWindow):
         base_path = os.path.splitext(image_path)[0]
         return f"{base_path}.roi"
 
-    def save_roi_file(self, roi_x, roi_y, roi_w, roi_h, edge_type="Unknown", confidence=0.0):
+    def save_roi_file(
+        self, roi_x, roi_y, roi_w, roi_h, edge_type="Unknown", confidence=0.0
+    ):
         """
         Save current ROI configuration to a .roi JSON file.
 
@@ -1494,19 +1532,11 @@ class MainWindow(QMainWindow):
             "source_image": os.path.basename(self.current_image_path),
             "source_image_full_path": self.current_image_path,
             "timestamp": datetime.now().isoformat(),
-            "image_dimensions": {
-                "width": self.image_w,
-                "height": self.image_h
-            },
-            "roi": {
-                "x": roi_x,
-                "y": roi_y,
-                "w": roi_w,
-                "h": roi_h
-            },
+            "image_dimensions": {"width": self.image_w, "height": self.image_h},
+            "roi": {"x": roi_x, "y": roi_y, "w": roi_w, "h": roi_h},
             "edge_type": edge_type,
             "edge_threshold": self.edge_threshold,
-            "confidence": confidence
+            "confidence": confidence,
         }
 
         try:
@@ -1519,7 +1549,9 @@ class MainWindow(QMainWindow):
             # Add to recent ROI files list
             self.add_to_recent_roi_files(roi_file_path)
 
-            self.statusBar().showMessage(f"💾 ROI saved: {os.path.basename(roi_file_path)}")
+            self.statusBar().showMessage(
+                f"💾 ROI saved: {os.path.basename(roi_file_path)}"
+            )
             return roi_file_path
 
         except Exception as e:
@@ -1552,12 +1584,16 @@ class MainWindow(QMainWindow):
             # Validate version
             version = roi_data.get("version", "unknown")
             if version != "1.0":
-                print(f"Warning: ROI file version {version} may not be fully compatible")
+                print(
+                    f"Warning: ROI file version {version} may not be fully compatible"
+                )
 
             # Store loaded ROI data
             self.current_roi_data = roi_data
 
-            self.statusBar().showMessage(f"📂 ROI loaded: {os.path.basename(roi_file_path)}")
+            self.statusBar().showMessage(
+                f"📂 ROI loaded: {os.path.basename(roi_file_path)}"
+            )
             return roi_data
 
         except json.JSONDecodeError as e:
@@ -1609,7 +1645,7 @@ class MainWindow(QMainWindow):
                     continue
 
                 # Calculate SFR value for this ROI on current image
-                roi_image = self.raw_data[y:y+h, x:x+w]
+                roi_image = self.raw_data[y : y + h, x : x + w]
                 sfr_value = self.calculate_sfr_value_only(roi_image)
 
                 # Add to markers list with calculated SFR value
@@ -1637,11 +1673,14 @@ class MainWindow(QMainWindow):
 
             # Validate ROI is within current image bounds
             if x + w > self.image_w or y + h > self.image_h:
-                self.statusBar().showMessage("⚠️ ROI coordinates exceed current image dimensions")
+                self.statusBar().showMessage(
+                    "⚠️ ROI coordinates exceed current image dimensions"
+                )
                 return False
 
             # Create QRect and trigger ROI processing
             from PyQt5.QtCore import QRect
+
             rect = QRect(x, y, w, h)
 
             # Update selection display on image
@@ -1668,7 +1707,9 @@ class MainWindow(QMainWindow):
         """
         try:
             # Standardize ROI orientation (vertical edge, dark side left, bright side right)
-            std_roi, std_edge_type, std_conf = SFRCalculator.standardize_roi_orientation(roi_image)
+            std_roi, std_edge_type, std_conf = (
+                SFRCalculator.standardize_roi_orientation(roi_image)
+            )
 
             # Validate edge on standardized ROI
             is_edge, msg, edge_type, confidence = SFRCalculator.validate_edge(
@@ -1695,7 +1736,7 @@ class MainWindow(QMainWindow):
                 return None
 
             # Get SFR value at ny/4
-            ny_frequency = getattr(self, 'ny_frequency', 0.5)
+            ny_frequency = getattr(self, "ny_frequency", 0.5)
             ny_4 = ny_frequency / 4
             frequencies_compensated = freqs * 4
 
@@ -1705,7 +1746,10 @@ class MainWindow(QMainWindow):
                     sfr_at_ny4 = sfr_values[idx_ny4]
                     # Linear interpolation for more accuracy
                     if 0 < idx_ny4 < len(frequencies_compensated) - 1:
-                        f1, f2 = frequencies_compensated[idx_ny4], frequencies_compensated[idx_ny4 + 1]
+                        f1, f2 = (
+                            frequencies_compensated[idx_ny4],
+                            frequencies_compensated[idx_ny4 + 1],
+                        )
                         v1, v2 = sfr_values[idx_ny4], sfr_values[idx_ny4 + 1]
                         if abs(f2 - f1) > 1e-10:
                             sfr_at_ny4 = v1 + (ny_4 - f1) * (v2 - v1) / (f2 - f1)
@@ -1750,7 +1794,7 @@ class MainWindow(QMainWindow):
             self.recent_roi_files.remove(roi_file_path)
         self.recent_roi_files.insert(0, roi_file_path)
         if len(self.recent_roi_files) > self.max_recent_roi_files:
-            self.recent_roi_files = self.recent_roi_files[:self.max_recent_roi_files]
+            self.recent_roi_files = self.recent_roi_files[: self.max_recent_roi_files]
         self.update_recent_roi_list()
         self.save_recent_roi_files()
 
@@ -1774,9 +1818,13 @@ class MainWindow(QMainWindow):
             # Store the selected file path and enable Apply button
             self.loaded_roi_file_path = roi_file_path
             self.ui.btn_roi_map_apply.setEnabled(True)
-            self.statusBar().showMessage(f"📂 ROI file selected: {os.path.basename(roi_file_path)} - Click 'ROI apply' to apply")
+            self.statusBar().showMessage(
+                f"📂 ROI file selected: {os.path.basename(roi_file_path)} - Click 'ROI apply' to apply"
+            )
         elif roi_file_path:
-            QMessageBox.warning(self, "ROI File Not Found", f"ROI file not found: {roi_file_path}")
+            QMessageBox.warning(
+                self, "ROI File Not Found", f"ROI file not found: {roi_file_path}"
+            )
             self.recent_roi_files.remove(roi_file_path)
             self.update_recent_roi_list()
             self.save_recent_roi_files()
@@ -1795,10 +1843,14 @@ class MainWindow(QMainWindow):
             # Enable ROI Manual and ROI Detect buttons
             self.ui.btn_roi_manual.setEnabled(True)
             # Enable ROI Detect only if edge is applied
-            self.ui.btn_roi_detact.setEnabled(self.edge_overlay_applied and self.locked_edge_mask is not None)
+            self.ui.btn_roi_detact.setEnabled(
+                self.edge_overlay_applied and self.locked_edge_mask is not None
+            )
             # Clear all marks when entering plan mode
             self.clear_all_marks()
-            self.statusBar().showMessage("📋 ROI Plan Mode: Pick ROI positions → Save config → Apply to any image")
+            self.statusBar().showMessage(
+                "📋 ROI Plan Mode: Pick ROI positions → Save config → Apply to any image"
+            )
         else:
             # Disable ROI buttons when ROI Plan Mode is off
             self.ui.btn_roi_detact.setEnabled(False)
@@ -1808,7 +1860,9 @@ class MainWindow(QMainWindow):
             self.ui.btn_roi_manual.setChecked(False)
             # Clear ROI markers from image
             self.clear_roi_markers()
-            self.statusBar().showMessage("📊 ROI Plan Mode: OFF - Ready for SFR measurement")
+            self.statusBar().showMessage(
+                "📊 ROI Plan Mode: OFF - Ready for SFR measurement"
+            )
 
     def on_roi_detect(self):
         """Handle ROI Detect button - auto-detect edges for ROI placement"""
@@ -1835,10 +1889,14 @@ class MainWindow(QMainWindow):
             self.clear_all_marks()
             # Enter ROI plan mode
             self.roi_plan_mode = True
-            self.statusBar().showMessage(f"✋ ROI Manual: Click to place ROI markers (Size: {self.click_select_size}×{self.click_select_size})")
+            self.statusBar().showMessage(
+                f"✋ ROI Manual: Click to place ROI markers (Size: {self.click_select_size}×{self.click_select_size})"
+            )
         else:
             num_markers = len(self.roi_markers)
-            self.statusBar().showMessage(f"📋 ROI Manual mode OFF - {num_markers} ROI(s) placed")
+            self.statusBar().showMessage(
+                f"📋 ROI Manual mode OFF - {num_markers} ROI(s) placed"
+            )
 
     def clear_roi_markers(self):
         """Clear all ROI markers and visual marks from the image (except the loaded .raw image)"""
@@ -1849,6 +1907,7 @@ class MainWindow(QMainWindow):
     def on_roi_map_load(self):
         """Handle Load .roi button - open file dialog and save path to recent ROI combo"""
         from PyQt5.QtWidgets import QFileDialog
+
         roi_file, _ = QFileDialog.getOpenFileName(
             self, "Load ROI File", "", "ROI Files (*.roi);;All Files (*)"
         )
@@ -1861,7 +1920,9 @@ class MainWindow(QMainWindow):
             self.ui.btn_roi_map_apply.setEnabled(True)
             # Select the file in combo
             self.ui.recent_roi_combo.setCurrentIndex(1)  # First item after placeholder
-            self.statusBar().showMessage(f"📂 ROI file loaded: {os.path.basename(roi_file)} - Click 'ROI apply' to apply")
+            self.statusBar().showMessage(
+                f"📂 ROI file loaded: {os.path.basename(roi_file)} - Click 'ROI apply' to apply"
+            )
 
     def on_roi_map_apply(self):
         """Handle ROI Apply button - apply the loaded ROI config to current image"""
@@ -1890,6 +1951,7 @@ class MainWindow(QMainWindow):
         else:
             # Show file dialog to select ROI file
             from PyQt5.QtWidgets import QFileDialog
+
             roi_file, _ = QFileDialog.getOpenFileName(
                 self, "Load ROI File", "", "ROI Files (*.roi);;All Files (*)"
             )
@@ -1909,7 +1971,9 @@ class MainWindow(QMainWindow):
         # Save all ROI markers to file
         saved_path = self.save_roi_markers_file()
         if saved_path:
-            self.statusBar().showMessage(f"💾 {len(self.roi_markers)} ROI(s) saved to: {os.path.basename(saved_path)}")
+            self.statusBar().showMessage(
+                f"💾 {len(self.roi_markers)} ROI(s) saved to: {os.path.basename(saved_path)}"
+            )
 
     def save_roi_markers_file(self):
         """Save all ROI markers to a .roi JSON file"""
@@ -1935,7 +1999,7 @@ class MainWindow(QMainWindow):
                 "x": int(x),
                 "y": int(y),
                 "w": int(w),
-                "h": int(h)
+                "h": int(h),
             }
             roi_list.append(roi_item)
 
@@ -1944,13 +2008,10 @@ class MainWindow(QMainWindow):
             "type": "roi_config",  # Indicates this is a position config file
             "source_image": os.path.basename(self.current_image_path),
             "timestamp": datetime.now().isoformat(),
-            "image_dimensions": {
-                "width": self.image_w,
-                "height": self.image_h
-            },
+            "image_dimensions": {"width": self.image_w, "height": self.image_h},
             "roi_size": self.click_select_size,
             "roi_count": len(roi_list),
-            "rois": roi_list
+            "rois": roi_list,
         }
 
         try:
@@ -1986,7 +2047,7 @@ class MainWindow(QMainWindow):
             self.recent_files.remove(file_path)
         self.recent_files.insert(0, file_path)
         if len(self.recent_files) > self.max_recent_files:
-            self.recent_files = self.recent_files[:self.max_recent_files]
+            self.recent_files = self.recent_files[: self.max_recent_files]
         self.update_recent_files_list()
         self.save_recent_files()  # Save immediately for persistence
 
@@ -2023,12 +2084,16 @@ class MainWindow(QMainWindow):
         """Handle raw format combobox selection change"""
         self.selected_raw_format_index = index
         if index == 0:
-            self.statusBar().showMessage("Raw Format: Auto Detect - will detect dimensions from file size/name")
+            self.statusBar().showMessage(
+                "Raw Format: Auto Detect - will detect dimensions from file size/name"
+            )
         else:
             data = self.ui.raw_format_combo.itemData(index)
             if data:
                 w, h, bpp, dtype_name = data
-                self.statusBar().showMessage(f"Raw Format: {w}×{h} {dtype_name} ({bpp} bytes/pixel)")
+                self.statusBar().showMessage(
+                    f"Raw Format: {w}×{h} {dtype_name} ({bpp} bytes/pixel)"
+                )
 
     def load_raw_file_from_path(self, fname):
         # This is a refactor of load_raw_file to allow loading from a given path (no dialog)
@@ -2037,7 +2102,7 @@ class MainWindow(QMainWindow):
 
         # Check file extension to determine loading method
         ext = os.path.splitext(fname)[1].lower()
-        if ext in ['.bmp', '.png', '.jpg', '.jpeg', '.tif', '.tiff']:
+        if ext in [".bmp", ".png", ".jpg", ".jpeg", ".tif", ".tiff"]:
             self.load_standard_image_file(fname)
             return
 
@@ -2047,7 +2112,9 @@ class MainWindow(QMainWindow):
         # Check if manual format is selected (index > 0)
         if self.selected_raw_format_index > 0:
             # Use manually selected format
-            format_data = self.ui.raw_format_combo.itemData(self.selected_raw_format_index)
+            format_data = self.ui.raw_format_combo.itemData(
+                self.selected_raw_format_index
+            )
             if format_data:
                 w, h, bpp, dtype_name = format_data
                 self.image_w = w
@@ -2055,20 +2122,28 @@ class MainWindow(QMainWindow):
                 dtype_choice = dtype_name
             else:
                 # Fallback to auto-detect
-                detected_w, detected_h, detected_dtype = self.auto_detect_raw_dimensions(file_size, fname)
+                detected_w, detected_h, detected_dtype = (
+                    self.auto_detect_raw_dimensions(file_size, fname)
+                )
                 if detected_w > 0 and detected_h > 0:
                     self.image_w = detected_w
                     self.image_h = detected_h
                 w, h = self.image_w, self.image_h
-                dtype_choice = detected_dtype if detected_dtype in dtype_options else "uint16"
+                dtype_choice = (
+                    detected_dtype if detected_dtype in dtype_options else "uint16"
+                )
         else:
             # Auto-detect mode
-            detected_w, detected_h, detected_dtype = self.auto_detect_raw_dimensions(file_size, fname)
+            detected_w, detected_h, detected_dtype = self.auto_detect_raw_dimensions(
+                file_size, fname
+            )
             if detected_w > 0 and detected_h > 0:
                 self.image_w = detected_w
                 self.image_h = detected_h
             w, h = self.image_w, self.image_h
-            dtype_choice = detected_dtype if detected_dtype in dtype_options else "uint16"
+            dtype_choice = (
+                detected_dtype if detected_dtype in dtype_options else "uint16"
+            )
 
         selected_dtype = dtype_options.get(dtype_choice, np.uint16)
         try:
@@ -2080,13 +2155,19 @@ class MainWindow(QMainWindow):
 
                 # Remove inactive borders (black edges)
                 original_shape = self.raw_data.shape
-                self.raw_data, crop_info = remove_inactive_borders(self.raw_data, threshold=0)
+                self.raw_data, crop_info = remove_inactive_borders(
+                    self.raw_data, threshold=0
+                )
 
                 # Update image dimensions after cropping
                 self.image_h, self.image_w = self.raw_data.shape
 
                 # Prepare status message with crop info
-                if crop_info and crop_info["rows_removed"] > 0 or crop_info["cols_removed"] > 0:
+                if (
+                    crop_info
+                    and crop_info["rows_removed"] > 0
+                    or crop_info["cols_removed"] > 0
+                ):
                     crop_msg = f" | Cropped: {original_shape[1]}×{original_shape[0]} → {self.image_w}×{self.image_h}"
                 else:
                     crop_msg = ""
@@ -2122,7 +2203,9 @@ class MainWindow(QMainWindow):
             img = cv2.imread(fname, cv2.IMREAD_UNCHANGED)
 
             if img is None:
-                QMessageBox.critical(self, "Error", f"Failed to read image file: {fname}")
+                QMessageBox.critical(
+                    self, "Error", f"Failed to read image file: {fname}"
+                )
                 return
 
             # Convert color images to grayscale for SFR analysis
@@ -2139,13 +2222,17 @@ class MainWindow(QMainWindow):
             original_shape = self.raw_data.shape
 
             # Remove inactive borders (black edges)
-            self.raw_data, crop_info = remove_inactive_borders(self.raw_data, threshold=0)
+            self.raw_data, crop_info = remove_inactive_borders(
+                self.raw_data, threshold=0
+            )
 
             # Update image dimensions
             self.image_h, self.image_w = self.raw_data.shape
 
             # Prepare status message with crop info
-            if crop_info and (crop_info["rows_removed"] > 0 or crop_info["cols_removed"] > 0):
+            if crop_info and (
+                crop_info["rows_removed"] > 0 or crop_info["cols_removed"] > 0
+            ):
                 crop_msg = f" | Cropped: {original_shape[1]}×{original_shape[0]} → {self.image_w}×{self.image_h}"
             else:
                 crop_msg = ""
@@ -2184,14 +2271,17 @@ class MainWindow(QMainWindow):
 
     def load_raw_file(self):
         fname, _ = QFileDialog.getOpenFileName(
-            self, "Open Image File", "", "Image Files (*.raw *.bmp *.png *.jpg *.jpeg *.tif *.tiff);;Raw Files (*.raw);;BMP Files (*.bmp);;All Files (*)"
+            self,
+            "Open Image File",
+            "",
+            "Image Files (*.raw *.bmp *.png *.jpg *.jpeg *.tif *.tiff);;Raw Files (*.raw);;BMP Files (*.bmp);;All Files (*)",
         )
         if not fname:
             return
 
         # Check file extension to determine loading method
         ext = os.path.splitext(fname)[1].lower()
-        if ext in ['.bmp', '.png', '.jpg', '.jpeg', '.tif', '.tiff']:
+        if ext in [".bmp", ".png", ".jpg", ".jpeg", ".tif", ".tiff"]:
             self.load_standard_image_file(fname)
             return
 
@@ -2201,7 +2291,9 @@ class MainWindow(QMainWindow):
         # Check if manual format is selected (index > 0)
         if self.selected_raw_format_index > 0:
             # Use manually selected format
-            format_data = self.ui.raw_format_combo.itemData(self.selected_raw_format_index)
+            format_data = self.ui.raw_format_combo.itemData(
+                self.selected_raw_format_index
+            )
             if format_data:
                 w, h, bpp, dtype_name = format_data
                 self.image_w = w
@@ -2209,18 +2301,26 @@ class MainWindow(QMainWindow):
                 dtype_choice = dtype_name
             else:
                 # Fallback to auto-detect
-                detected_w, detected_h, detected_dtype = self.auto_detect_raw_dimensions(file_size, fname)
+                detected_w, detected_h, detected_dtype = (
+                    self.auto_detect_raw_dimensions(file_size, fname)
+                )
                 if detected_w > 0 and detected_h > 0:
                     self.image_w = detected_w
                     self.image_h = detected_h
-                dtype_choice = detected_dtype if detected_dtype in dtype_options else "uint16"
+                dtype_choice = (
+                    detected_dtype if detected_dtype in dtype_options else "uint16"
+                )
         else:
             # Auto-detect mode
-            detected_w, detected_h, detected_dtype = self.auto_detect_raw_dimensions(file_size, fname)
+            detected_w, detected_h, detected_dtype = self.auto_detect_raw_dimensions(
+                file_size, fname
+            )
             if detected_w > 0 and detected_h > 0:
                 self.image_w = detected_w
                 self.image_h = detected_h
-            dtype_choice = detected_dtype if detected_dtype in dtype_options else "uint16"
+            dtype_choice = (
+                detected_dtype if detected_dtype in dtype_options else "uint16"
+            )
 
         selected_dtype = dtype_options.get(dtype_choice, np.uint16)
 
@@ -2235,13 +2335,17 @@ class MainWindow(QMainWindow):
 
                 # Remove inactive borders (black edges)
                 original_shape = self.raw_data.shape
-                self.raw_data, crop_info = remove_inactive_borders(self.raw_data, threshold=0)
+                self.raw_data, crop_info = remove_inactive_borders(
+                    self.raw_data, threshold=0
+                )
 
                 # Update image dimensions after cropping
                 self.image_h, self.image_w = self.raw_data.shape
 
                 # Prepare status message with crop info
-                if crop_info and (crop_info["rows_removed"] > 0 or crop_info["cols_removed"] > 0):
+                if crop_info and (
+                    crop_info["rows_removed"] > 0 or crop_info["cols_removed"] > 0
+                ):
                     crop_msg = f" | Cropped: {original_shape[1]}×{original_shape[0]} → {self.image_w}×{self.image_h}"
                 else:
                     crop_msg = ""
@@ -2285,7 +2389,7 @@ class MainWindow(QMainWindow):
             basename = os.path.basename(filename)
 
             # Pattern: WxH (e.g., 1920x1080, 4000x3000)
-            match = re.search(r'(\d{3,5})[xX](\d{3,5})', basename)
+            match = re.search(r"(\d{3,5})[xX](\d{3,5})", basename)
             if match:
                 w, h = int(match.group(1)), int(match.group(2))
                 # Determine data type based on file size
@@ -2294,7 +2398,7 @@ class MainWindow(QMainWindow):
                         return (w, h, dtype_name)
 
             # Pattern: W_H (e.g., 1920_1080, 4000_3000)
-            match = re.search(r'(\d{3,5})_(\d{3,5})', basename)
+            match = re.search(r"(\d{3,5})_(\d{3,5})", basename)
             if match:
                 w, h = int(match.group(1)), int(match.group(2))
                 for bpp, dtype_name in [(1, "uint8"), (2, "uint16"), (4, "float32")]:
@@ -2302,7 +2406,7 @@ class MainWindow(QMainWindow):
                         return (w, h, dtype_name)
 
             # Pattern: W-H (e.g., 1920-1080)
-            match = re.search(r'(\d{3,5})-(\d{3,5})', basename)
+            match = re.search(r"(\d{3,5})-(\d{3,5})", basename)
             if match:
                 w, h = int(match.group(1)), int(match.group(2))
                 for bpp, dtype_name in [(1, "uint8"), (2, "uint16"), (4, "float32")]:
@@ -2311,11 +2415,11 @@ class MainWindow(QMainWindow):
 
             # Check for bit depth hints in filename
             bit_hint = None
-            if '8bit' in basename.lower() or '_8b' in basename.lower():
+            if "8bit" in basename.lower() or "_8b" in basename.lower():
                 bit_hint = 1
-            elif '16bit' in basename.lower() or '_16b' in basename.lower():
+            elif "16bit" in basename.lower() or "_16b" in basename.lower():
                 bit_hint = 2
-            elif '32bit' in basename.lower() or 'float' in basename.lower():
+            elif "32bit" in basename.lower() or "float" in basename.lower():
                 bit_hint = 4
 
         # Strategy 2: Common raw image dimensions to check
@@ -2323,52 +2427,52 @@ class MainWindow(QMainWindow):
         common_sizes = [
             # (width, height, bytes_per_pixel, dtype_name)
             # 8-bit versions first
-            (640, 480, 1, "uint8"),       # VGA
-            (640, 640, 1, "uint8"),       # Square
+            (640, 480, 1, "uint8"),  # VGA
+            (640, 640, 1, "uint8"),  # Square
             (640, 641, 1, "uint8"),
-            (800, 600, 1, "uint8"),       # SVGA
-            (1024, 768, 1, "uint8"),      # XGA
-            (1280, 720, 1, "uint8"),      # HD 720p
-            (1920, 1080, 1, "uint8"),     # Full HD
-            (2048, 1536, 1, "uint8"),     # 3MP
-            (2592, 1944, 1, "uint8"),     # 5MP
-            (3264, 2448, 1, "uint8"),     # 8MP
-            (4032, 3024, 1, "uint8"),     # 12MP
-            (4096, 2160, 1, "uint8"),     # 4K
-            (256, 256, 1, "uint8"),       # Square test
+            (800, 600, 1, "uint8"),  # SVGA
+            (1024, 768, 1, "uint8"),  # XGA
+            (1280, 720, 1, "uint8"),  # HD 720p
+            (1920, 1080, 1, "uint8"),  # Full HD
+            (2048, 1536, 1, "uint8"),  # 3MP
+            (2592, 1944, 1, "uint8"),  # 5MP
+            (3264, 2448, 1, "uint8"),  # 8MP
+            (4032, 3024, 1, "uint8"),  # 12MP
+            (4096, 2160, 1, "uint8"),  # 4K
+            (256, 256, 1, "uint8"),  # Square test
             (640, 1920, 1, "uint8"),  # Innorev Tester
             (512, 512, 1, "uint8"),
             (1024, 1024, 1, "uint8"),
             (2048, 2048, 1, "uint8"),
             (4096, 4096, 1, "uint8"),
             # Sensor common sizes - 16-bit (raw sensor data)
-            (4000, 3000, 2, "uint16"),    # 12MP sensor
-            (4032, 3024, 2, "uint16"),    # 12MP iPhone
-            (4608, 3456, 2, "uint16"),    # 16MP
-            (4624, 3472, 2, "uint16"),    # Sony IMX
-            (4656, 3496, 2, "uint16"),    # Sony IMX
-            (5184, 3888, 2, "uint16"),    # 20MP
-            (5472, 3648, 2, "uint16"),    # 20MP
-            (6000, 4000, 2, "uint16"),    # 24MP
-            (6016, 4016, 2, "uint16"),    # Sony A7
-            (6048, 4024, 2, "uint16"),    # Sony
-            (8256, 5504, 2, "uint16"),    # 45MP
-            (8192, 5464, 2, "uint16"),    # Canon R5
-            (7952, 5304, 2, "uint16"),    # Canon 5D
-            (9504, 6336, 2, "uint16"),    # 60MP
+            (4000, 3000, 2, "uint16"),  # 12MP sensor
+            (4032, 3024, 2, "uint16"),  # 12MP iPhone
+            (4608, 3456, 2, "uint16"),  # 16MP
+            (4624, 3472, 2, "uint16"),  # Sony IMX
+            (4656, 3496, 2, "uint16"),  # Sony IMX
+            (5184, 3888, 2, "uint16"),  # 20MP
+            (5472, 3648, 2, "uint16"),  # 20MP
+            (6000, 4000, 2, "uint16"),  # 24MP
+            (6016, 4016, 2, "uint16"),  # Sony A7
+            (6048, 4024, 2, "uint16"),  # Sony
+            (8256, 5504, 2, "uint16"),  # 45MP
+            (8192, 5464, 2, "uint16"),  # Canon R5
+            (7952, 5304, 2, "uint16"),  # Canon 5D
+            (9504, 6336, 2, "uint16"),  # 60MP
             # Video/display resolutions - 16-bit
             (640, 480, 2, "uint16"),
             (640, 640, 2, "uint16"),
             (800, 600, 2, "uint16"),
             (1024, 768, 2, "uint16"),
-            (1280, 720, 2, "uint16"),     # HD 720p
-            (1920, 1080, 2, "uint16"),    # Full HD
-            (2048, 1536, 2, "uint16"),    # 3MP
-            (2560, 1440, 2, "uint16"),    # QHD
-            (2592, 1944, 2, "uint16"),    # 5MP
-            (3264, 2448, 2, "uint16"),    # 8MP
-            (3840, 2160, 2, "uint16"),    # 4K UHD
-            (4096, 2160, 2, "uint16"),    # 4K DCI
+            (1280, 720, 2, "uint16"),  # HD 720p
+            (1920, 1080, 2, "uint16"),  # Full HD
+            (2048, 1536, 2, "uint16"),  # 3MP
+            (2560, 1440, 2, "uint16"),  # QHD
+            (2592, 1944, 2, "uint16"),  # 5MP
+            (3264, 2448, 2, "uint16"),  # 8MP
+            (3840, 2160, 2, "uint16"),  # 4K UHD
+            (4096, 2160, 2, "uint16"),  # 4K DCI
             # Square sizes - 16-bit (common for test patterns)
             (256, 256, 2, "uint16"),
             (512, 512, 2, "uint16"),
@@ -2519,13 +2623,15 @@ class MainWindow(QMainWindow):
             self.ui.recent_roi_combo.setEnabled(True)
             # Clear all SFR results and marks when entering ROI map mode
             self.clear_all_marks()
-            self.statusBar().showMessage("Selection Mode: ROI map (select from saved ROI config files)")
+            self.statusBar().showMessage(
+                "Selection Mode: ROI map (select from saved ROI config files)"
+            )
 
     def clear_all_marks(self):
         """Clear all visual marks and SFR results from the image (keep only the loaded .raw image)"""
         # Clear ROI markers
         self.roi_markers = []
-        if hasattr(self, 'image_label') and self.image_label:
+        if hasattr(self, "image_label") and self.image_label:
             self.image_label.roi_markers = []
 
             # Clear selection rectangle
@@ -2542,19 +2648,23 @@ class MainWindow(QMainWindow):
             self.image_label.update()
 
         # Clear SFR plots
-        if hasattr(self, 'ax_esf') and self.ax_esf:
+        if hasattr(self, "ax_esf") and self.ax_esf:
             self.ax_esf.clear()
-            self.ax_esf.set_title("ESF (Edge Spread Function)", fontsize=10, fontweight="bold")
-        if hasattr(self, 'ax_lsf') and self.ax_lsf:
+            self.ax_esf.set_title(
+                "ESF (Edge Spread Function)", fontsize=10, fontweight="bold"
+            )
+        if hasattr(self, "ax_lsf") and self.ax_lsf:
             self.ax_lsf.clear()
-            self.ax_lsf.set_title("LSF (Line Spread Function)", fontsize=10, fontweight="bold")
-        if hasattr(self, 'ax_sfr') and self.ax_sfr:
+            self.ax_lsf.set_title(
+                "LSF (Line Spread Function)", fontsize=10, fontweight="bold"
+            )
+        if hasattr(self, "ax_sfr") and self.ax_sfr:
             self.ax_sfr.clear()
             self.ax_sfr.set_title("SFR/MTF", fontsize=10, fontweight="bold")
-        if hasattr(self, 'ax_roi') and self.ax_roi:
+        if hasattr(self, "ax_roi") and self.ax_roi:
             self.ax_roi.clear()
             self.ax_roi.set_title("ROI Image", fontsize=10, fontweight="bold")
-        if hasattr(self, 'canvas') and self.canvas:
+        if hasattr(self, "canvas") and self.canvas:
             self.canvas.draw()
 
         # Clear last SFR data
@@ -2581,10 +2691,12 @@ class MainWindow(QMainWindow):
 
         # Update the label
         self.ui.ny_freq_value_label.setText(f"{self.ny_frequency:.2f}")
-        self.statusBar().showMessage(f"Nyquist frequency set to {self.ny_frequency:.2f}")
+        self.statusBar().showMessage(
+            f"Nyquist frequency set to {self.ny_frequency:.2f}"
+        )
 
         # If we have stored SFR data, re-plot with new Ny frequency
-        if hasattr(self, 'last_sfr_data') and self.last_sfr_data is not None:
+        if hasattr(self, "last_sfr_data") and self.last_sfr_data is not None:
             freqs, sfr_values, esf, lsf, edge_type, roi_image = self.last_sfr_data
             self.plot_sfr(freqs, sfr_values, esf, lsf, edge_type, roi_image)
 
@@ -2595,14 +2707,18 @@ class MainWindow(QMainWindow):
 
         # If edge is locked (Apply Edge was clicked), don't update - keep locked pattern
         if self.locked_edge_mask is not None:
-            self.statusBar().showMessage(f"🔒 Edge LOCKED - Threshold change ignored (click Erase Edge to unlock)")
+            self.statusBar().showMessage(
+                f"🔒 Edge LOCKED - Threshold change ignored (click Erase Edge to unlock)"
+            )
             return
 
         # Update edge display if edge detect is enabled (preview mode only)
         if self.edge_detect_enabled and self.raw_data is not None:
             self.update_edge_display()
         else:
-            self.statusBar().showMessage(f"🔍 Edge Detection Threshold: {self.edge_threshold}")
+            self.statusBar().showMessage(
+                f"🔍 Edge Detection Threshold: {self.edge_threshold}"
+            )
 
     def on_edge_detect_changed(self):
         """Handle edge detect checkbox change"""
@@ -2612,18 +2728,26 @@ class MainWindow(QMainWindow):
         if self.locked_edge_mask is not None:
             if self.edge_detect_enabled:
                 self.display_with_locked_edge()
-                self.statusBar().showMessage(f"🔒 Edge LOCKED - Showing fixed reference pattern")
+                self.statusBar().showMessage(
+                    f"🔒 Edge LOCKED - Showing fixed reference pattern"
+                )
             else:
                 self.show_image_without_edge()
-                self.statusBar().showMessage("❌ Edge Detect: OFF (locked pattern still saved)")
+                self.statusBar().showMessage(
+                    "❌ Edge Detect: OFF (locked pattern still saved)"
+                )
             return
 
         if self.edge_detect_enabled:
             if self.raw_data is not None:
                 self.update_edge_display()
-                self.statusBar().showMessage(f"✅ Edge Detect: ON (Threshold: {self.edge_threshold})")
+                self.statusBar().showMessage(
+                    f"✅ Edge Detect: ON (Threshold: {self.edge_threshold})"
+                )
             else:
-                self.statusBar().showMessage("⚠️ Load an image first to see edge detection")
+                self.statusBar().showMessage(
+                    "⚠️ Load an image first to see edge detection"
+                )
         else:
             # Restore original image
             if self.display_data is not None:
@@ -2655,8 +2779,8 @@ class MainWindow(QMainWindow):
 
         # Overlay edges in red color
         rgb_image[edge_mask, 0] = 255  # Red
-        rgb_image[edge_mask, 1] = 0    # Green
-        rgb_image[edge_mask, 2] = 0    # Blue
+        rgb_image[edge_mask, 1] = 0  # Green
+        rgb_image[edge_mask, 2] = 0  # Blue
 
         # Convert to QImage and display
         bytes_per_line = 3 * w
@@ -2670,7 +2794,9 @@ class MainWindow(QMainWindow):
         # Count edge pixels
         edge_count = np.sum(edge_mask)
         edge_percent = edge_count / (h * w) * 100
-        self.statusBar().showMessage(f"🔍 Edge Detect: {edge_count} pixels ({edge_percent:.1f}%) | Threshold: {self.edge_threshold}")
+        self.statusBar().showMessage(
+            f"🔍 Edge Detect: {edge_count} pixels ({edge_percent:.1f}%) | Threshold: {self.edge_threshold}"
+        )
 
     def show_image_without_edge(self):
         """Restore original grayscale image without edge overlay"""
@@ -2679,7 +2805,9 @@ class MainWindow(QMainWindow):
 
         h, w = self.display_data.shape
         bytes_per_line = w
-        q_img = QImage(self.display_data.tobytes(), w, h, bytes_per_line, QImage.Format_Grayscale8)
+        q_img = QImage(
+            self.display_data.tobytes(), w, h, bytes_per_line, QImage.Format_Grayscale8
+        )
         pixmap = QPixmap.fromImage(q_img)
 
         self.image_label.pixmap_original = pixmap
@@ -2707,7 +2835,9 @@ class MainWindow(QMainWindow):
 
         # Display with locked edge
         self.display_with_locked_edge()
-        self.statusBar().showMessage(f"🔒 Edge LOCKED (Threshold: {self.edge_threshold}) - Pattern fixed as reference")
+        self.statusBar().showMessage(
+            f"🔒 Edge LOCKED (Threshold: {self.edge_threshold}) - Pattern fixed as reference"
+        )
 
     def on_erase_edge(self):
         """Remove edge overlay from the image display and clear locked pattern"""
@@ -2745,8 +2875,8 @@ class MainWindow(QMainWindow):
         min_w = min(w, edge_w)
         edge_region = self.locked_edge_mask[:min_h, :min_w]
         rgb_image[:min_h, :min_w, 0][edge_region] = 255  # Red
-        rgb_image[:min_h, :min_w, 1][edge_region] = 0    # Green
-        rgb_image[:min_h, :min_w, 2][edge_region] = 0    # Blue
+        rgb_image[:min_h, :min_w, 1][edge_region] = 0  # Green
+        rgb_image[:min_h, :min_w, 2][edge_region] = 0  # Blue
 
         # Convert to QImage and display
         bytes_per_line = 3 * w
@@ -2763,7 +2893,9 @@ class MainWindow(QMainWindow):
         self.ui.btn_view_mode.setChecked(False)
         # Reset cursor to arrow
         self.image_label.setCursor(Qt.ArrowCursor)
-        self.statusBar().showMessage("📊 SFR Mode: Click or drag to select ROI for analysis")
+        self.statusBar().showMessage(
+            "📊 SFR Mode: Click or drag to select ROI for analysis"
+        )
 
     def on_view_mode_clicked(self):
         """Switch to VIEW (panning) mode"""
@@ -2773,6 +2905,70 @@ class MainWindow(QMainWindow):
         # Set cursor to open hand
         self.image_label.setCursor(Qt.OpenHandCursor)
         self.statusBar().showMessage("🖐 VIEW Mode: Click and drag to pan the image")
+
+    def on_save_png_clicked(self):
+        """Save the currently loaded/displayed image as PNG file"""
+        if self.raw_data is None:
+            QMessageBox.warning(
+                self, "No Image", "No image loaded. Please load an image first."
+            )
+            return
+
+        # Generate default filename based on current image
+        if self.current_image_path:
+            base_name = os.path.splitext(os.path.basename(self.current_image_path))[0]
+            default_name = f"{base_name}.png"
+            default_dir = os.path.dirname(self.current_image_path)
+        else:
+            default_name = "image.png"
+            default_dir = ""
+
+        # Open save file dialog
+        save_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Image as PNG",
+            os.path.join(default_dir, default_name),
+            "PNG Files (*.png);;All Files (*)",
+        )
+
+        if not save_path:
+            return  # User cancelled
+
+        try:
+            # Prepare the image data for saving
+            if self.raw_data.dtype == np.uint8:
+                # Already 8-bit, save directly
+                save_data = self.raw_data
+            elif self.raw_data.dtype == np.uint16:
+                # 16-bit data - normalize to 8-bit for PNG
+                img_min = self.raw_data.min()
+                img_max = self.raw_data.max()
+                if img_max > img_min:
+                    save_data = (
+                        (self.raw_data - img_min) / (img_max - img_min) * 255
+                    ).astype(np.uint8)
+                else:
+                    save_data = np.zeros_like(self.raw_data, dtype=np.uint8)
+            else:
+                # Other dtypes - normalize to 8-bit
+                img_min = self.raw_data.min()
+                img_max = self.raw_data.max()
+                if img_max > img_min:
+                    save_data = (
+                        (self.raw_data - img_min) / (img_max - img_min) * 255
+                    ).astype(np.uint8)
+                else:
+                    save_data = np.zeros_like(self.raw_data, dtype=np.uint8)
+
+            # Save using OpenCV
+            cv2.imwrite(save_path, save_data)
+
+            self.statusBar().showMessage(
+                f"💾 Image saved: {os.path.basename(save_path)} ({self.image_w}×{self.image_h})"
+            )
+
+        except Exception as e:
+            QMessageBox.critical(self, "Save Error", f"Failed to save image: {str(e)}")
 
     def process_roi(self, rect):
         """處理使用者選取的區域 with optional stabilize filter"""
@@ -2791,7 +2987,9 @@ class MainWindow(QMainWindow):
         # ROI Plan Mode: Only show ROI info, skip SFR calculation
         if self.roi_plan_mode:
             # Detect edge type for display only
-            is_edge, msg, edge_type, confidence = SFRCalculator.validate_edge(roi, threshold=self.edge_threshold)
+            is_edge, msg, edge_type, confidence = SFRCalculator.validate_edge(
+                roi, threshold=self.edge_threshold
+            )
             if is_edge:
                 self.statusBar().showMessage(
                     f"📋 ROI Plan Mode: ({x},{y}) {w}×{h} | {edge_type} (Conf: {confidence:.1f}%) - SFR paused"
@@ -2800,7 +2998,7 @@ class MainWindow(QMainWindow):
                 self.current_roi_data = {
                     "roi": {"x": x, "y": y, "w": w, "h": h},
                     "edge_type": edge_type,
-                    "confidence": confidence
+                    "confidence": confidence,
                 }
             else:
                 self.statusBar().showMessage(
@@ -2809,10 +3007,14 @@ class MainWindow(QMainWindow):
             return  # Skip SFR calculation
 
         # Standardize ROI orientation: vertical edge with dark side left, bright side right
-        std_roi, std_edge_type, std_confidence = SFRCalculator.standardize_roi_orientation(roi)
+        std_roi, std_edge_type, std_confidence = (
+            SFRCalculator.standardize_roi_orientation(roi)
+        )
 
         # 4. Detect Slit Edge and Edge Orientation (using adjustable threshold) on standardized ROI
-        is_edge, msg, edge_type, confidence = SFRCalculator.validate_edge(std_roi, threshold=self.edge_threshold)
+        is_edge, msg, edge_type, confidence = SFRCalculator.validate_edge(
+            std_roi, threshold=self.edge_threshold
+        )
 
         # Use standardized edge type if available
         if std_edge_type is not None:
@@ -2843,7 +3045,9 @@ class MainWindow(QMainWindow):
 
                 # 6. Show Result
                 if freqs is not None:
-                    sfr_at_ny4 = self.plot_sfr(freqs, sfr_values, esf, lsf, edge_type, roi_image=std_roi)
+                    sfr_at_ny4 = self.plot_sfr(
+                        freqs, sfr_values, esf, lsf, edge_type, roi_image=std_roi
+                    )
 
                     # Display SFR value at top-right corner of ROI
                     self.image_label.set_roi_sfr_display(sfr_at_ny4, x, y, w, h)
@@ -2885,7 +3089,9 @@ class MainWindow(QMainWindow):
             roi_sample = self.raw_data[roi_y : roi_y + h, roi_x : roi_x + w]
 
             # Standardize each sample orientation before validation and calculation
-            roi_sample_std, sample_edge_type, sample_conf = SFRCalculator.standardize_roi_orientation(roi_sample)
+            roi_sample_std, sample_edge_type, sample_conf = (
+                SFRCalculator.standardize_roi_orientation(roi_sample)
+            )
 
             # Validate edge on standardized sample (using adjustable threshold)
             is_edge, msg, edge_type_check, confidence = SFRCalculator.validate_edge(
@@ -2894,7 +3100,9 @@ class MainWindow(QMainWindow):
 
             if is_edge and confidence > 50:  # Minimum confidence threshold
                 # Use standardized edge type if available
-                used_edge_type = sample_edge_type if sample_edge_type is not None else edge_type
+                used_edge_type = (
+                    sample_edge_type if sample_edge_type is not None else edge_type
+                )
 
                 result = SFRCalculator.calculate_sfr(
                     roi_sample_std,
@@ -2926,10 +3134,17 @@ class MainWindow(QMainWindow):
             stability = np.mean(sfr_std)
 
             # Display results
-            self.plot_sfr(freqs, sfr_averaged, esf_averaged, lsf_averaged, edge_type, roi_image=roi)
+            self.plot_sfr(
+                freqs,
+                sfr_averaged,
+                esf_averaged,
+                lsf_averaged,
+                edge_type,
+                roi_image=roi,
+            )
 
             # Get SFR value at ny/4 for display (same calculation as in plot_sfr)
-            ny_frequency = getattr(self, 'ny_frequency', 0.5)
+            ny_frequency = getattr(self, "ny_frequency", 0.5)
 
             ny_4 = ny_frequency / 4
             frequencies_compensated = freqs * 4
@@ -2939,7 +3154,10 @@ class MainWindow(QMainWindow):
                 if idx_ny4 < len(sfr_averaged):
                     sfr_at_ny4 = sfr_averaged[idx_ny4]
                     if 0 < idx_ny4 < len(frequencies_compensated) - 1:
-                        f1, f2 = frequencies_compensated[idx_ny4], frequencies_compensated[idx_ny4 + 1]
+                        f1, f2 = (
+                            frequencies_compensated[idx_ny4],
+                            frequencies_compensated[idx_ny4 + 1],
+                        )
                         v1, v2 = sfr_averaged[idx_ny4], sfr_averaged[idx_ny4 + 1]
                         if abs(f2 - f1) > 1e-10:
                             sfr_at_ny4 = v1 + (ny_4 - f1) * (v2 - v1) / (f2 - f1)
@@ -2952,7 +3170,9 @@ class MainWindow(QMainWindow):
             self.image_label.set_roi_sfr_display(sfr_at_ny4, x, y, w, h)
 
             # Save ROI to file for future reuse
-            self.save_roi_file(x, y, w, h, edge_type, 85.0)  # Use default confidence for stabilized
+            self.save_roi_file(
+                x, y, w, h, edge_type, 85.0
+            )  # Use default confidence for stabilized
 
             mtf50_idx = np.argmin(np.abs(sfr_averaged - 0.5))
             mtf50_val = freqs[mtf50_idx] if mtf50_idx < len(freqs) else 0
@@ -2964,8 +3184,9 @@ class MainWindow(QMainWindow):
         else:
             self.statusBar().showMessage(f"Error: Could not collect valid edge samples")
 
-
-    def plot_sfr(self, frequencies, sfr_values, esf, lsf, edge_type="V-Edge", roi_image=None):
+    def plot_sfr(
+        self, frequencies, sfr_values, esf, lsf, edge_type="V-Edge", roi_image=None
+    ):
         """
         Plot ESF, LSF, SFR/MTF and ROI image in four subplots (2x2 layout)
 
@@ -2988,11 +3209,15 @@ class MainWindow(QMainWindow):
 
         # Plot ROI Image (top-right)
         if roi_image is not None:
-            self.ax_roi.imshow(roi_image, cmap='gray', aspect='equal')
-            self.ax_roi.set_title(f"ROI Image ({roi_image.shape[1]}×{roi_image.shape[0]})", fontsize=10, fontweight="bold")
+            self.ax_roi.imshow(roi_image, cmap="gray", aspect="equal")
+            self.ax_roi.set_title(
+                f"ROI Image ({roi_image.shape[1]}×{roi_image.shape[0]})",
+                fontsize=10,
+                fontweight="bold",
+            )
         else:
             self.ax_roi.set_title("ROI Image", fontsize=10, fontweight="bold")
-        self.ax_roi.axis('off')
+        self.ax_roi.axis("off")
 
         # Plot 1: ESF (Edge Spread Function)
         # Note: ESF is oversampled, so we need to account for that in x-axis
@@ -3045,10 +3270,10 @@ class MainWindow(QMainWindow):
                 # Left side: search from peak towards left
                 left_x = None
                 for i in range(peak_idx, 0, -1):
-                    if lsf_abs[i] >= half_max and lsf_abs[i-1] < half_max:
+                    if lsf_abs[i] >= half_max and lsf_abs[i - 1] < half_max:
                         # Interpolate to find exact crossing point
-                        x_a, x_b = lsf_x[i-1], lsf_x[i]
-                        y_a, y_b = lsf_abs[i-1], lsf_abs[i]
+                        x_a, x_b = lsf_x[i - 1], lsf_x[i]
+                        y_a, y_b = lsf_abs[i - 1], lsf_abs[i]
                         if y_b != y_a:
                             left_x = x_a + (half_max - y_a) * (x_b - x_a) / (y_b - y_a)
                         else:
@@ -3058,10 +3283,10 @@ class MainWindow(QMainWindow):
                 # Right side: search from peak towards right
                 right_x = None
                 for i in range(peak_idx, len(lsf_abs) - 1):
-                    if lsf_abs[i] >= half_max and lsf_abs[i+1] < half_max:
+                    if lsf_abs[i] >= half_max and lsf_abs[i + 1] < half_max:
                         # Interpolate to find exact crossing point
-                        x_a, x_b = lsf_x[i], lsf_x[i+1]
-                        y_a, y_b = lsf_abs[i], lsf_abs[i+1]
+                        x_a, x_b = lsf_x[i], lsf_x[i + 1]
+                        y_a, y_b = lsf_abs[i], lsf_abs[i + 1]
                         if y_b != y_a:
                             right_x = x_a + (half_max - y_a) * (x_b - x_a) / (y_b - y_a)
                         else:
@@ -3072,11 +3297,31 @@ class MainWindow(QMainWindow):
                     fwhm = right_x - left_x
 
                     # Draw vertical lines for FWHM
-                    self.ax_lsf.axvline(x=left_x, color="purple", linestyle="--", alpha=0.7, linewidth=1.5)
-                    self.ax_lsf.axvline(x=right_x, color="purple", linestyle="--", alpha=0.7, linewidth=1.5)
+                    self.ax_lsf.axvline(
+                        x=left_x,
+                        color="purple",
+                        linestyle="--",
+                        alpha=0.7,
+                        linewidth=1.5,
+                    )
+                    self.ax_lsf.axvline(
+                        x=right_x,
+                        color="purple",
+                        linestyle="--",
+                        alpha=0.7,
+                        linewidth=1.5,
+                    )
 
                     # Draw horizontal line at half-max
-                    self.ax_lsf.hlines(y=half_max, xmin=left_x, xmax=right_x, color="purple", linestyle="-", alpha=0.5, linewidth=1)
+                    self.ax_lsf.hlines(
+                        y=half_max,
+                        xmin=left_x,
+                        xmax=right_x,
+                        color="purple",
+                        linestyle="-",
+                        alpha=0.5,
+                        linewidth=1,
+                    )
 
                     # Add text box for FWHM value
                     self.ax_lsf.text(
@@ -3088,7 +3333,12 @@ class MainWindow(QMainWindow):
                         color="purple",
                         ha="center",
                         va="top",
-                        bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="purple", alpha=0.9),
+                        bbox=dict(
+                            boxstyle="round,pad=0.3",
+                            facecolor="white",
+                            edgecolor="purple",
+                            alpha=0.9,
+                        ),
                     )
         except Exception as e:
             print(f"Could not calculate FWHM: {e}")
@@ -3099,10 +3349,12 @@ class MainWindow(QMainWindow):
         # Plot 3: SFR/MTF Result
         # Multiply frequencies by 4 to compensate for supersampling
         frequencies_compensated = frequencies * 4
-        self.ax_sfr.plot(frequencies_compensated, sfr_values, "b-", linewidth=2.5, label="MTF")
+        self.ax_sfr.plot(
+            frequencies_compensated, sfr_values, "b-", linewidth=2.5, label="MTF"
+        )
 
         # Get Nyquist frequency from stored value (default 0.5)
-        ny_frequency = getattr(self, 'ny_frequency', 0.5)
+        ny_frequency = getattr(self, "ny_frequency", 0.5)
 
         # Calculate ny/4 reference position (ISO 12233:2023 compliant)
         # ny/4 = user_ny_frequency / 4

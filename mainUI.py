@@ -72,7 +72,9 @@ class Ui_MainWindow(object):
         self.raw_format_combo.setObjectName("raw_format_combo")
         self.raw_format_combo.addItem("")
         self.file_layout.addWidget(self.raw_format_combo)
-        spacerItem = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
+        spacerItem = QtWidgets.QSpacerItem(
+            40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum
+        )
         self.file_layout.addItem(spacerItem)
         self.left_layout.addWidget(self.file_group_box)
         self.selection_mode_group_box = QtWidgets.QGroupBox(self.left_panel)
@@ -81,7 +83,9 @@ class Ui_MainWindow(object):
         font.setWeight(75)
         self.selection_mode_group_box.setFont(font)
         self.selection_mode_group_box.setObjectName("selection_mode_group_box")
-        self.selection_mode_layout = QtWidgets.QHBoxLayout(self.selection_mode_group_box)
+        self.selection_mode_layout = QtWidgets.QHBoxLayout(
+            self.selection_mode_group_box
+        )
         self.selection_mode_layout.setObjectName("selection_mode_layout")
         self.radio_drag = QtWidgets.QRadioButton(self.selection_mode_group_box)
         font = QtGui.QFont()
@@ -145,7 +149,9 @@ class Ui_MainWindow(object):
         self.recent_roi_combo.setFont(font)
         self.recent_roi_combo.setObjectName("recent_roi_combo")
         self.selection_mode_layout.addWidget(self.recent_roi_combo)
-        spacerItem1 = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
+        spacerItem1 = QtWidgets.QSpacerItem(
+            40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum
+        )
         self.selection_mode_layout.addItem(spacerItem1)
         self.left_layout.addWidget(self.selection_mode_group_box)
         self.view_mode_layout = QtWidgets.QHBoxLayout()
@@ -167,6 +173,14 @@ class Ui_MainWindow(object):
         self.btn_view_mode.setCheckable(True)
         self.btn_view_mode.setObjectName("btn_view_mode")
         self.view_mode_layout.addWidget(self.btn_view_mode)
+        # Save PNG button - allows user to save the currently loaded raw/display image as PNG
+        self.btn_save_png = QtWidgets.QPushButton(self.left_panel)
+        font = QtGui.QFont()
+        font.setBold(True)
+        font.setWeight(75)
+        self.btn_save_png.setFont(font)
+        self.btn_save_png.setObjectName("btn_save_png")
+        self.view_mode_layout.addWidget(self.btn_save_png)
         self.left_layout.addLayout(self.view_mode_layout)
         self.image_view_group_box = QtWidgets.QGroupBox(self.left_panel)
         font = QtGui.QFont()
@@ -248,7 +262,9 @@ class Ui_MainWindow(object):
         self.btn_roi_map_save.setFont(font)
         self.btn_roi_map_save.setObjectName("btn_roi_map_save")
         self.edge_threshold_layout_3.addWidget(self.btn_roi_map_save)
-        spacerItem2 = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
+        spacerItem2 = QtWidgets.QSpacerItem(
+            40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum
+        )
         self.edge_threshold_layout_3.addItem(spacerItem2)
         self.verticalLayout.addLayout(self.edge_threshold_layout_3)
         self.left_layout.addWidget(self.groupBox)
@@ -379,7 +395,9 @@ class Ui_MainWindow(object):
         self.supersampling_spinbox.setProperty("value", 4)
         self.supersampling_spinbox.setObjectName("supersampling_spinbox")
         self.sfr_result_layout.addWidget(self.supersampling_spinbox)
-        spacerItem3 = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
+        spacerItem3 = QtWidgets.QSpacerItem(
+            40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum
+        )
         self.sfr_result_layout.addItem(spacerItem3)
         self.right_layout.addWidget(self.sfr_result_group_box)
         self.canvas_placeholder = QtWidgets.QWidget(self.right_panel)
@@ -422,7 +440,9 @@ class Ui_MainWindow(object):
         self.ny_freq_value_label.setFont(font)
         self.ny_freq_value_label.setObjectName("ny_freq_value_label")
         self.ny_layout.addWidget(self.ny_freq_value_label)
-        spacerItem4 = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
+        spacerItem4 = QtWidgets.QSpacerItem(
+            40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum
+        )
         self.ny_layout.addItem(spacerItem4)
         self.right_layout.addWidget(self.nyquist_group_box)
         self.horizontalLayout.addWidget(self.main_splitter)
@@ -463,17 +483,27 @@ class Ui_MainWindow(object):
         self.btn_load.setText(_translate("MainWindow", "Load Image"))
         self.recent_files_combo.setToolTip(_translate("MainWindow", "Recent Files"))
         self.label_raw_format.setText(_translate("MainWindow", "Format:"))
-        self.raw_format_combo.setToolTip(_translate("MainWindow", "Select raw image format (Auto-detect or manual selection)"))
+        self.raw_format_combo.setToolTip(
+            _translate(
+                "MainWindow",
+                "Select raw image format (Auto-detect or manual selection)",
+            )
+        )
         self.raw_format_combo.setItemText(0, _translate("MainWindow", "Auto Detect"))
-        self.selection_mode_group_box.setTitle(_translate("MainWindow", "Selection Mode"))
+        self.selection_mode_group_box.setTitle(
+            _translate("MainWindow", "Selection Mode")
+        )
         self.radio_drag.setText(_translate("MainWindow", "Drag"))
         self.radio_click.setText(_translate("MainWindow", "Click"))
         self.size_label.setText(_translate("MainWindow", "Size:"))
         self.radio_script_roi.setText(_translate("MainWindow", "ROI map"))
         self.btn_roi_map_load.setText(_translate("MainWindow", "Load .roi"))
-        self.recent_roi_combo.setToolTip(_translate("MainWindow", "Select recent ROI file"))
+        self.recent_roi_combo.setToolTip(
+            _translate("MainWindow", "Select recent ROI file")
+        )
         self.btn_sfr_mode.setText(_translate("MainWindow", "📊 SFR"))
         self.btn_view_mode.setText(_translate("MainWindow", "🖐 VIEW"))
+        self.btn_save_png.setText(_translate("MainWindow", "💾 Save as PNG"))
         self.image_view_group_box.setTitle(_translate("MainWindow", "Image View"))
         self.groupBox.setTitle(_translate("MainWindow", "ROI control"))
         self.checkBox.setText(_translate("MainWindow", "ROI Plan"))
@@ -498,7 +528,9 @@ class Ui_MainWindow(object):
         self.method_combo.setItemText(6, _translate("MainWindow", "wiener"))
         self.stabilize_checkbox.setText(_translate("MainWindow", " SFR Stabilize ||"))
         self.supersampling_label.setText(_translate("MainWindow", "Supersample:"))
-        self.supersampling_spinbox.setToolTip(_translate("MainWindow", "Supersampling factor for SFR calculation (1-16x)"))
+        self.supersampling_spinbox.setToolTip(
+            _translate("MainWindow", "Supersampling factor for SFR calculation (1-16x)")
+        )
         self.supersampling_spinbox.setSuffix(_translate("MainWindow", "x"))
         self.nyquist_group_box.setTitle(_translate("MainWindow", "Nyquist"))
         self.ny_label.setText(_translate("MainWindow", "Nyquist :"))
