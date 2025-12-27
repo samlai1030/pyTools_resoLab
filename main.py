@@ -1,1275 +1,42 @@
+"""
+pyTools_ResoLab - SFR/MTF Analysis Tool
+Main application entry point.
+"""
+
 import json
 import os
 import sys
 
 import cv2
 import numpy as np
-
-from mainUI import Ui_MainWindow
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from PyQt5.QtCore import QRect, Qt
-from PyQt5.QtGui import QColor, QImage, QPainter, QPen, QPixmap
+from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtWidgets import (
     QApplication,
-    QCheckBox,
-    QComboBox,
     QFileDialog,
-    QHBoxLayout,
-    QLabel,
-    QLineEdit,
     QMainWindow,
     QMessageBox,
-    QPushButton,
-    QRadioButton,
-    QScrollArea,
-    QSlider,
-    QSpinBox,
+    QSizePolicy,
     QVBoxLayout,
-    QWidget,
 )
-from scipy import fftpack
-from scipy.ndimage import gaussian_filter, gaussian_filter1d, uniform_filter1d
-from scipy.signal import butter, filtfilt, medfilt, savgol_filter, wiener
 
-
-# Constants
-SUPERSAMPLING_FACTOR = 4
-EDGE_GRADIENT_THRESHOLD = 50  # Minimum gradient magnitude for edge detection
-MAX_FILE_SIZE_MB = 500  # Maximum raw file size in MB
-MAX_IMAGE_DIMENSION = 16384  # Maximum image dimension for memory safety
-WHITE_REGION_MIN_PERCENT = (
-    0.01  # Minimum percentage of pixels for white region analysis
-)
-EPSILON = np.finfo(float).eps  # Machine epsilon for division by zero protection
-
-
-def read_raw_image(file_path, width=None, height=None, dtype=np.uint16):
-    """
-    Read a raw image file with validation and error checking
-
-    Parameters:
-    - file_path: path to the raw file
-    - width: image width (if known)
-    - height: image height (if known)
-    - dtype: data type (usually uint8, uint16, or float32)
-
-    Returns:
-    - numpy array: loaded image data or None on error
-
-    Raises:
-    - ValueError: if file size doesn't match expected dimensions or dtype
-    - IOError: if file cannot be read
-    - MemoryError: if file is too large
-    """
-    try:
-        # Validate file size before reading to prevent OOM
-        file_size = os.path.getsize(file_path)
-        max_size_bytes = MAX_FILE_SIZE_MB * 1024 * 1024
-
-        if file_size > max_size_bytes:
-            raise MemoryError(
-                f"File size ({file_size / (1024**2):.1f} MB) exceeds maximum allowed size ({MAX_FILE_SIZE_MB} MB)"
-            )
-
-        # Validate dimensions if provided
-        if width and height:
-            if width < 1 or width > MAX_IMAGE_DIMENSION:
-                raise ValueError(
-                    f"Width {width} is out of valid range (1-{MAX_IMAGE_DIMENSION})"
-                )
-            if height < 1 or height > MAX_IMAGE_DIMENSION:
-                raise ValueError(
-                    f"Height {height} is out of valid range (1-{MAX_IMAGE_DIMENSION})"
-                )
-
-            # Calculate expected file size
-            expected_size = width * height * np.dtype(dtype).itemsize
-            if file_size != expected_size:
-                raise ValueError(
-                    f"File size ({file_size} bytes) doesn't match expected size "
-                    f"({expected_size} bytes) for {width}x{height} image with dtype {dtype}"
-                )
-
-        # Read file data
-        with open(file_path, "rb") as f:
-            raw_data = f.read()
-
-        # Validate data size is compatible with dtype
-        dtype_itemsize = np.dtype(dtype).itemsize
-        if len(raw_data) % dtype_itemsize != 0:
-            raise ValueError(
-                f"File size ({len(raw_data)} bytes) is not divisible by dtype size "
-                f"({dtype_itemsize} bytes). Data may be corrupted."
-            )
-
-        # Convert to numpy array based on dtype
-        if dtype == np.uint16:
-            img_array = np.frombuffer(raw_data, dtype=np.uint16)
-        elif dtype == np.uint8:
-            img_array = np.frombuffer(raw_data, dtype=np.uint8)
-        else:
-            img_array = np.frombuffer(raw_data, dtype=dtype)
-
-        # Reshape if dimensions are known
-        if width and height:
-            # Additional safety check before reshape
-            if img_array.size != width * height:
-                raise ValueError(
-                    f"Array size ({img_array.size}) doesn't match dimensions "
-                    f"({width}x{height}={width*height})"
-                )
-            img_array = img_array.reshape(height, width)
-        else:
-            # Try to guess square dimensions
-            total_pixels = len(img_array)
-            side = int(np.sqrt(total_pixels))
-            if side * side == total_pixels:
-                img_array = img_array.reshape(side, side)
-            else:
-                print(
-                    f"Cannot determine image dimensions. Total values: {total_pixels}"
-                )
-                return img_array
-
-        return img_array
-
-    except (IOError, OSError) as e:
-        print(f"Error reading file {file_path}: {e}")
-        return None
-    except MemoryError as e:
-        print(f"Memory error: {e}")
-        return None
-    except ValueError as e:
-        print(f"Validation error: {e}")
-        return None
-    except Exception as e:
-        print(f"Unexpected error reading raw file: {e}")
-        return None
-
-
-def remove_inactive_borders(image, threshold=0):
-    """
-    Remove black/inactive borders from image edges.
-
-    Removes rows and columns that are entirely below the threshold value,
-    effectively cropping out inactive/black borders from sensor images.
-
-    Parameters:
-    - image: numpy array (2D grayscale or raw image)
-    - threshold: pixel value threshold (pixels <= threshold are considered inactive)
-
-    Returns:
-    - cropped image with inactive borders removed
-    - crop_info: dict with original size, new size, and crop offsets
-    """
-    if image is None or image.size == 0:
-        return image, None
-
-    original_shape = image.shape
-
-    # Find rows and columns with active pixels (above threshold)
-    row_mask = np.any(image > threshold, axis=1)
-    col_mask = np.any(image > threshold, axis=0)
-
-    # Get indices of first and last active rows/columns
-    active_rows = np.where(row_mask)[0]
-    active_cols = np.where(col_mask)[0]
-
-    if len(active_rows) == 0 or len(active_cols) == 0:
-        # No active pixels found, return original
-        return image, {
-            "original_size": original_shape,
-            "new_size": original_shape,
-            "crop_top": 0,
-            "crop_bottom": 0,
-            "crop_left": 0,
-            "crop_right": 0,
-            "rows_removed": 0,
-            "cols_removed": 0,
-        }
-
-    row_start, row_end = active_rows[0], active_rows[-1] + 1
-    col_start, col_end = active_cols[0], active_cols[-1] + 1
-
-    cropped = image[row_start:row_end, col_start:col_end]
-
-    crop_info = {
-        "original_size": original_shape,
-        "new_size": cropped.shape,
-        "crop_top": row_start,
-        "crop_bottom": original_shape[0] - row_end,
-        "crop_left": col_start,
-        "crop_right": original_shape[1] - col_end,
-        "rows_removed": original_shape[0] - cropped.shape[0],
-        "cols_removed": original_shape[1] - cropped.shape[1],
-    }
-
-    return cropped, crop_info
-
-
-class SFRCalculator:
-    """物理運算核心：處理邊緣檢測與 SFR 計算"""
-
-    @staticmethod
-    def _apply_lsf_smoothing(lsf, method="wiener"):
-        """
-        應用選定的 LSF 平滑方法
-
-        Parameters:
-        - lsf: Line Spread Function 陣列
-        - method: 平滑方法
-          * "savgol": Savitzky-Golay filter (推薦)
-          * "gaussian": 高斯濾波
-          * "median": 中值濾波
-          * "uniform": 均勻濾波
-          * "butterworth": Butterworth IIR 濾波
-          * "wiener": Wiener 自適應濾波
-          * "none": 不平滑
-
-        Returns:
-        - 平滑後的 LSF 陣列
-        """
-        if method == "none" or len(lsf) <= 5:
-            return lsf
-
-        try:
-            if method == "savgol":
-
-                # Savitzky-Golay: 保留峰值特性的多項式平滑
-                from scipy.signal import savgol_filter
-
-                window_length = min(11, len(lsf) if len(lsf) % 2 == 1 else len(lsf) - 1)
-                if window_length < 5:
-                    window_length = 5
-                return savgol_filter(lsf, window_length=window_length, polyorder=3)
-
-            elif method == "gaussian":
-                # 高斯濾波: 簡單平滑
-                from scipy.ndimage import gaussian_filter1d
-
-                return gaussian_filter1d(lsf, sigma=1.5)
-
-            elif method == "median":
-                # 中值濾波: 對異常值魯棒
-                from scipy.signal import medfilt
-
-                kernel_size = min(11, len(lsf) if len(lsf) % 2 == 1 else len(lsf) - 1)
-                if kernel_size < 5:
-                    kernel_size = 5
-                return medfilt(lsf, kernel_size=kernel_size)
-
-            elif method == "uniform":
-                # 均勻濾波: 最快的平滑
-                from scipy.ndimage import uniform_filter1d
-
-                return uniform_filter1d(lsf, size=5)
-
-            elif method == "butterworth":
-                # Butterworth IIR 濾波: 頻率域控制
-                try:
-                    b, a = butter(2, 0.1)
-                    return filtfilt(b, a, lsf)
-                except (ValueError, RuntimeError) as e:
-
-                    # Savitzky-Golay: 保留峰值特性的多項式平滑
-                    from scipy.signal import savgol_filter
-
-                    # 如果失敗，回退到 Savitzky-Golay
-                    print(
-                        f"Warning: Butterworth filter failed: {e}, falling back to Savitzky-Golay"
-                    )
-                    window_length = min(
-                        11, len(lsf) if len(lsf) % 2 == 1 else len(lsf) - 1
-                    )
-                    if window_length < 5:
-                        window_length = 5
-                    return savgol_filter(lsf, window_length=window_length, polyorder=3)
-
-            elif method == "wiener":
-                # Wiener 自適應濾波: 噪聲自適應
-                from scipy.signal import wiener
-
-                mysize = min(11, len(lsf) if len(lsf) % 2 == 1 else len(lsf) - 1)
-                if mysize < 5:
-                    mysize = 5
-                return wiener(lsf, mysize=mysize)
-
-            else:
-                # 未知方法，使用預設 Savitzky-Golay
-                from scipy.signal import savgol_filter
-
-                window_length = min(11, len(lsf) if len(lsf) % 2 == 1 else len(lsf) - 1)
-                if window_length < 5:
-                    window_length = 5
-                return savgol_filter(lsf, window_length=window_length, polyorder=3)
-
-        except Exception as e:
-            # 如果任何濾波失敗，返回原始 LSF
-            print(f"Warning: LSF smoothing method '{method}' failed: {e}")
-            return lsf
-
-    @staticmethod
-    def detect_edge_orientation(roi_image):
-        """
-        檢測邊緣方向：垂直邊(V-edge) 或 水平邊(H-edge)。
-
-        Returns:
-        - edge_type: "V-Edge" (垂直), "H-Edge" (水平), or "Mixed"
-        - confidence: 0-100, 邊緣方向的置信度
-        - details: 詳細信息字典
-        """
-        if roi_image is None or roi_image.size == 0:
-            return "No Edge", 0, {}
-
-        # 轉為灰阶
-        gray = (
-            roi_image
-            if len(roi_image.shape) == 2
-            else cv2.cvtColor(roi_image, cv2.COLOR_BGR2GRAY)
-        )
-        gray = gray.astype(np.float64)
-
-        # 使用 Sobel 算子計算梯度
-        sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)  # 垂直邊 (x方向梯度)
-        sobely = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)  # 水平邊 (y方向梯度)
-
-        # 計算梯度的強度
-        mag_x = np.sum(np.abs(sobelx))
-        mag_y = np.sum(np.abs(sobely))
-
-        # 計算梯度方向直方圖
-        angle = np.arctan2(sobely, sobelx) * 180 / np.pi
-        angle = np.mod(angle + 180, 180)  # 將角度標準化到 0-180
-
-        # 統計邊緣方向
-        v_edges = (
-            np.sum((angle > 80) & (angle < 100)) / angle.size * 100
-        )  # 垂直邊 ~90度
-        h_edges = (
-            np.sum(((angle > 170) | (angle < 10))) / angle.size * 100
-        )  # 水平邊 ~0或180度
-
-        # 判定邊緣類型
-        edge_strength_ratio = mag_x / (mag_y + 1e-10)
-
-        details = {
-            "mag_x": mag_x,
-            "mag_y": mag_y,
-            "ratio_x_y": edge_strength_ratio,
-            "v_edges_percent": v_edges,
-            "h_edges_percent": h_edges,
-            "mean_x": np.mean(np.abs(sobelx)),
-            "mean_y": np.mean(np.abs(sobely)),
-        }
-
-        # 根據比率判定邊緣類型
-        if edge_strength_ratio > 1.5:
-            # 垂直邊：x方向梯度強
-            confidence = min(100, (edge_strength_ratio - 1.0) * 50)
-            return "V-Edge", confidence, details
-        elif edge_strength_ratio < 0.67:
-            # 水平邊：y方向梯度強
-            confidence = min(100, (1.0 / edge_strength_ratio - 1.0) * 50)
-            return "H-Edge", confidence, details
-        else:
-            # 混合邊
-            confidence = 50
-            return "Mixed", confidence, details
-
-    @staticmethod
-    def validate_edge(roi_image, threshold=50):
-        """
-        檢測是否為有效的 Slit Edge。
-        判斷依據：
-        1. 圖像梯度是否足夠強 (有邊緣)。
-        2. 邊緣是否接近直線。
-
-        Parameters:
-        - roi_image: ROI 圖像
-        - threshold: 邊緣檢測閾值 (默認 50)
-        """
-        if roi_image is None or roi_image.size == 0:
-            return False, "Empty ROI", "No Edge", 0
-
-        # 使用 Sobel 算子計算梯度
-        gray = (
-            roi_image
-            if len(roi_image.shape) == 2
-            else cv2.cvtColor(roi_image, cv2.COLOR_BGR2GRAY)
-        )
-        sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
-        sobely = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
-        magnitude = np.sqrt(sobelx**2 + sobely**2)
-
-        # 簡單判定：最大梯度強度需大於閾值
-        if np.max(magnitude) < threshold:
-            return False, "Low Contrast / No Edge detected", "No Edge", 0
-
-        # 檢測邊緣方向
-        edge_type, confidence, _ = SFRCalculator.detect_edge_orientation(roi_image)
-
-        return True, "Edge Detected", edge_type, confidence
-
-    @staticmethod
-    def standardize_roi_orientation(roi_image):
-        """
-        Standardize ROI orientation for SFR calculation.
-        Ensures the edge is vertical with:
-        1. Dark side on left, bright side on right
-        2. Dark side (black) width increases toward bottom (slant direction)
-
-        This standardization improves SFR measurement consistency by:
-        1. Rotating horizontal edges (H-Edge) to vertical (V-Edge)
-        2. Flipping horizontally if left side is brighter than right side
-        3. Flipping vertically to ensure dark side width is larger at bottom
-
-        Parameters:
-        - roi_image: Input ROI image (numpy array)
-
-        Returns:
-        - standardized_roi: ROI with standardized orientation
-        - edge_type: Detected edge type after standardization ("V-Edge" or original)
-        - confidence: Edge detection confidence
-        """
-        if roi_image is None or roi_image.size == 0:
-            return roi_image, None, 0.0
-
-        img = roi_image.copy()
-
-        # Helper function to get grayscale for analysis
-        def get_gray(image):
-            if image.ndim == 3 and image.shape[2] >= 3:
-                return cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            elif image.ndim == 3:
-                return np.mean(image, axis=2).astype(image.dtype)
-            else:
-                return image
-
-        gray_for_analysis = get_gray(img)
-
-        # Step 1: Detect current edge orientation
-        edge_type, confidence, details = SFRCalculator.detect_edge_orientation(
-            gray_for_analysis
-        )
-
-        # Step 2: If horizontal edge, rotate 90 degrees counter-clockwise to make it vertical
-        if edge_type == "H-Edge":
-            # Rotate image 90 degrees counter-clockwise
-            img = np.rot90(img, k=1)
-            gray_for_analysis = get_gray(img)
-
-            # Re-detect orientation after rotation (should now be V-Edge)
-            edge_type, confidence, details = SFRCalculator.detect_edge_orientation(
-                gray_for_analysis
-            )
-
-        # Step 3: Ensure dark side is on left, bright side is on right
-        h, w = gray_for_analysis.shape[:2]
-        left_half_width = max(1, w // 2)
-
-        left_mean = np.mean(gray_for_analysis[:, :left_half_width])
-        right_mean = np.mean(gray_for_analysis[:, left_half_width:])
-
-        # If left side is brighter than right side, flip horizontally
-        if left_mean > right_mean:
-            img = np.fliplr(img)
-            gray_for_analysis = get_gray(img)
-
-        # Step 4: Ensure dark side (black) width is larger at bottom than top
-        # This standardizes the slant direction of the edge
-        # Compare the edge position (transition point) between top and bottom rows
-        h, w = gray_for_analysis.shape[:2]
-
-        # Get top and bottom portions of the image
-        top_portion_height = max(1, h // 4)
-        bottom_portion_height = max(1, h // 4)
-
-        top_rows = gray_for_analysis[:top_portion_height, :]
-        bottom_rows = gray_for_analysis[-bottom_portion_height:, :]
-
-        # Find edge position (where intensity crosses 50%) for top and bottom
-        # Average each portion vertically to get a 1D profile
-        top_profile = np.mean(top_rows, axis=0)
-        bottom_profile = np.mean(bottom_rows, axis=0)
-
-        # Normalize profiles
-        def find_edge_position(profile):
-            p_min, p_max = np.min(profile), np.max(profile)
-            if p_max - p_min < 1e-6:
-                return len(profile) // 2
-            p_norm = (profile - p_min) / (p_max - p_min)
-            # Find the position closest to 0.5 (edge center)
-            return np.argmin(np.abs(p_norm - 0.5))
-
-        top_edge_pos = find_edge_position(top_profile)
-        bottom_edge_pos = find_edge_position(bottom_profile)
-
-        # Dark side is on left. If dark side width at bottom < dark side width at top,
-        # the edge position at bottom is less than at top, meaning we need to flip vertically
-        # We want: bottom_edge_pos > top_edge_pos (dark region wider at bottom)
-        if bottom_edge_pos < top_edge_pos:
-            img = np.flipud(img)
-            gray_for_analysis = get_gray(img)
-
-        # Final edge detection for confidence
-        edge_type, confidence, details = SFRCalculator.detect_edge_orientation(
-            gray_for_analysis
-        )
-
-        return img, edge_type, confidence
-
-    @staticmethod
-    def calculate_sfr(
-        roi_image,
-        edge_type="V-Edge",
-        compensate_bias=True,
-        compensate_noise=True,
-        lsf_smoothing_method="savgol",
-        supersampling_factor=4,
-    ):
-        """
-        計算 SFR (Spatial Frequency Response) - ISO 12233:2023 Standard with Compensation & LSF Smoothing
-
-        符合 ISO 12233:2023 標準的空間頻率響應測量方法
-        支持垂直邊(V-Edge)和水平邊(H-Edge)。
-        包括白區域偏差和噪聲補償、LSF 峰值平滑。
-
-        Parameters:
-        - roi_image: ROI 圖像
-        - edge_type: "V-Edge" 或 "H-Edge"
-        - compensate_bias: 補償白區域偏差/亮度偏移 (預設 True)
-        - compensate_noise: 補償白區域噪聲 (預設 True)
-        - lsf_smoothing_method: LSF 平滑方法 (預設 "savgol")
-          * "savgol": Savitzky-Golay filter (推薦，保留峰值特性)
-          * "gaussian": 高斯濾波
-          * "median": 中值濾波 (對異常值魯棒)
-          * "uniform": 均勻平滑濾波 (最快)
-          * "butterworth": Butterworth IIR 濾波 (頻率域控制)
-          * "wiener": Wiener 自適應濾波 (噪聲自適應)
-          * "none": 不進行 LSF 平滑
-        - supersampling_factor: 超採樣因子 (預設 4, 範圍 1-16)
-
-        Returns:
-        - frequencies: 頻率陣列 (cycles/pixel)
-        - sfr: SFR 值 (歸一化到 DC = 1)
-        - esf: Edge Spread Function
-        - lsf: Line Spread Function
-        """
-        # 轉為灰阶並正規化到 0-1 範圍
-        img = roi_image.astype(np.float64)
-        if len(img.shape) == 3:
-            img = np.mean(img, axis=2)
-
-        # 正規化到 0-1
-        img_min = np.min(img)
-        img_max = np.max(img)
-        if img_max > img_min:
-            img = (img - img_min) / (img_max - img_min)
-        else:
-            img = np.zeros_like(img)
-
-        # 步驟 0a: 白區域偏差補償 (White Area Bias Compensation)
-        # 補償白區域的亮度偏移/偏差
-        if compensate_bias:
-            # 提取白區域（值 > 0.9）
-            white_mask = img > 0.9
-            if np.sum(white_mask) > 10:  # 確保有足夠的白區域樣本
-                white_level = np.mean(img[white_mask])
-                # 標準白級應為 1.0，計算偏差
-                bias_correction = 1.0 - white_level
-                # 應用偏差補償
-                img = img + bias_correction
-                # 確保仍在 [0, 1] 範圍內
-                img = np.clip(img, 0, 1)
-
-        # 步驟 0b: 白區域噪聲補償 (White Area Noise Compensation)
-        # 通過分析白區域噪聲，應用自適應低通濾波減少噪聲
-        if compensate_noise:
-            # 提取白區域（值 > 0.85）用於噪聲估計
-            white_mask_noise = img > 0.85
-            if np.sum(white_mask_noise) > 20:
-                # 計算白區域的標準差（噪聲幅度）
-                white_noise_std = np.std(img[white_mask_noise])
-
-                # 如果噪聲顯著，應用自適應濾波
-                if white_noise_std > 0.01:  # 噪聲閾值
-                    from scipy.ndimage import gaussian_filter
-
-                    # 應用高斯濾波，標準差基於測定的噪聲
-                    sigma = white_noise_std * 0.5  # 調整濾波強度
-                    if edge_type == "V-Edge":
-                        # 只在行方向濾波（垂直方向），保留邊緣清晰度
-                        img = gaussian_filter(img, sigma=(sigma, 0))
-                    else:  # H-Edge
-                        # 只在列方向濾波（水平方向），保留邊緣清晰度
-                        img = gaussian_filter(img, sigma=(0, sigma))
-
-        # Step 1: 邊緣提取與超採樣 (ISO 12233:2023 Section 7.1)
-        if edge_type == "V-Edge":
-            # 垂直邊：對寬度方向進行分析
-            esf_raw = np.mean(img, axis=0)
-            # 使用立方插值進行超採樣
-            from scipy.interpolate import interp1d
-
-            x_orig = np.arange(len(esf_raw))
-            f_cubic = interp1d(x_orig, esf_raw, kind="cubic", fill_value="extrapolate")
-            x_new = np.linspace(
-                0, len(esf_raw) - 1, (len(esf_raw) - 1) * supersampling_factor + 1
-            )
-            esf = f_cubic(x_new)
-        else:  # H-Edge
-            # 水平邊：對高度方向進行分析
-            esf_raw = np.mean(img, axis=1)
-            from scipy.interpolate import interp1d
-
-            x_orig = np.arange(len(esf_raw))
-            f_cubic = interp1d(x_orig, esf_raw, kind="cubic", fill_value="extrapolate")
-            x_new = np.linspace(
-                0, len(esf_raw) - 1, (len(esf_raw) - 1) * supersampling_factor + 1
-            )
-            esf = f_cubic(x_new)
-
-        # Step 2: 亞像素邊緣位置檢測與對齐 (ISO 12233:2023 Section 7.2)
-        # 找到 50% 點的位置（邊緣中心）
-        esf_min = np.min(esf)
-        esf_max = np.max(esf)
-        esf_normalized = (esf - esf_min) / (esf_max - esf_min + 1e-10)
-
-        # 找到最接近 50% 的位置
-        idx_50 = np.argmin(np.abs(esf_normalized - 0.5))
-
-        # 使用線性插值精細定位 50% 點
-        if idx_50 > 0 and idx_50 < len(esf_normalized) - 1:
-            # 線性插值找到精確的 50% 位置
-            if esf_normalized[idx_50] < 0.5:
-                slope = esf_normalized[idx_50 + 1] - esf_normalized[idx_50]
-                if slope != 0:
-                    frac = (0.5 - esf_normalized[idx_50]) / slope
-                else:
-                    frac = 0
-            else:
-                slope = esf_normalized[idx_50] - esf_normalized[idx_50 - 1]
-                if slope != 0:
-                    frac = (esf_normalized[idx_50] - 0.5) / slope
-                else:
-                    frac = 0
-        else:
-            frac = 0
-
-        # 邊緣對齐：移動 ESF 使得 50% 點對齐到整數位置
-        edge_pos = idx_50 + frac
-        shift_amount = edge_pos - int(edge_pos)
-
-        # 使用循環移位和插值進行邊緣對齐
-        if abs(shift_amount) > 1e-6:
-            from scipy.ndimage import shift as ndimage_shift
-
-            esf = ndimage_shift(esf, -shift_amount, order=1, mode="nearest")
-
-        # Step 3: 計算 LSF (Line Spread Function)
-        # ISO 12233:2023 使用一階差分
-        lsf = np.diff(esf)
-
-        # Step 3a: LSF Peak Smoothing - 可選的濾波方法
-        # 應用選定的平滑方法以改善 LSF 峰值平滑度
-        lsf = SFRCalculator._apply_lsf_smoothing(lsf, method=lsf_smoothing_method)
-
-        # Step 4: 應用視窗函數減少頻譜洩漏 (ISO 12233:2023 推薦 Hann 窗)
-        window = np.hanning(len(lsf))
-        lsf_windowed = lsf * window
-
-        # Step 5: FFT 轉換進行頻譜分析
-        # Validate LSF has sufficient data for FFT
-        if len(lsf_windowed) < 4:
-            print(
-                f"Warning: LSF too short ({len(lsf_windowed)} samples) for FFT analysis"
-            )
-            return None, None, esf, lsf
-
-        if np.sum(np.abs(lsf_windowed)) < EPSILON:
-            print("Warning: LSF sum is too small for meaningful FFT")
-            return None, None, esf, lsf
-
-        # 使用超採樣因子補零以改善頻率解析度
-        n_fft = len(lsf_windowed)
-        n_fft_padded = n_fft * supersampling_factor
-        fft_res = np.abs(fftpack.fft(lsf_windowed, n=n_fft_padded))
-
-        # Step 6: 頻率軸計算與歸一化 (ISO 12233:2023)
-        # 考慮超採樣因子，頻率軸需要相應調整
-        # d = 1/supersampling_factor 是超採樣後的像素間距
-        freqs = fftpack.fftfreq(n_fft_padded, d=1.0 / supersampling_factor)
-
-        # 只取正頻率部分
-        n_half = len(freqs) // 2
-        sfr = fft_res[:n_half]
-        frequencies = freqs[:n_half]
-
-        # 歸一化：將 DC 分量設為 1 (ISO 12233:2023 Section 7.4)
-        dc_component = sfr[0]
-        if dc_component > EPSILON:
-            sfr = sfr / dc_component
-        else:
-            print(
-                f"Warning: DC component too small ({dc_component}), using fallback normalization"
-            )
-            sfr = sfr / EPSILON
-
-        # 限制 SFR 到合理範圍 [0, 1]
-        sfr = np.clip(sfr, 0, 1)
-
-        # Step 7: 返回結果
-        # 轉換頻率回到原始像素空間（考慮超採樣）
-        # Note: Frequency scaling is already handled in fftfreq with d=1/supersampling_factor
-        # No additional division is needed here to avoid double compensation
-        frequencies = frequencies / supersampling_factor
-
-        # 限制頻率範圍到 Nyquist 頻率 (0.5 cycles/pixel)
-        valid_idx = frequencies <= 0.5
-        frequencies = frequencies[valid_idx]
-        sfr = sfr[valid_idx]
-
-        return frequencies, sfr, esf, lsf
-
-
-class ImageLabel(QLabel):
-    """自定義 QLabel 用於處理滑鼠選取 ROI"""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.selection_start = None
-        self.selection_end = None
-        self.is_selecting = False
-        self.pixmap_original = None
-        self.pixmap_scaled = None
-        self.roi_callback = None  # Callback function for ROI selection
-        self.zoom_level = 1.0  # Zoom factor
-        self.scroll_area = None  # Reference to scroll area
-        self.selection_mode = "drag"  # "drag" or "click"
-        self.parent_window = parent  # Reference to main window for mode access
-        self.selection_info_text = ""  # Display selection info
-        self.image_w = 640  # Image width
-        self.image_h = 640  # Image height
-        self.selection_rect = None  # Store selected 40x40 rectangle
-        self.roi_sfr_value = None  # Store SFR value to display at ROI corner
-        self.roi_position = None  # Store ROI (x, y, w, h) for SFR display
-        self.roi_markers = []  # List of ROI markers [(x, y, w, h, name), ...]
-        self._updating_zoom = False  # Guard flag to prevent recursion
-        # Panning support for VIEW mode
-        self.is_panning = False
-        self.pan_start_pos = None
-        self.pan_scroll_start_h = 0
-        self.pan_scroll_start_v = 0
-        self.setMouseTracking(True)
-        self.setAlignment(Qt.AlignTop | Qt.AlignLeft)
-
-    def mousePressEvent(self, event):
-        if not self.pixmap_original:
-            return
-
-        # Right-click: Start panning (works in any mode)
-        if event.button() == Qt.RightButton:
-            self.is_panning = True
-            self.pan_start_pos = event.pos()
-            if self.scroll_area:
-                self.pan_scroll_start_h = self.scroll_area.horizontalScrollBar().value()
-                self.pan_scroll_start_v = self.scroll_area.verticalScrollBar().value()
-            self.setCursor(Qt.ClosedHandCursor)
-            return
-
-        # Check if VIEW mode (panning mode) is active for left-click
-        if self.parent_window and hasattr(self.parent_window, "view_mode"):
-            view_mode = self.parent_window.view_mode
-        else:
-            view_mode = "sfr"  # Default to SFR mode
-
-        if view_mode == "view":
-            # VIEW mode: Start panning with left-click too
-            if event.button() == Qt.LeftButton:
-                self.is_panning = True
-                self.pan_start_pos = event.pos()
-                if self.scroll_area:
-                    self.pan_scroll_start_h = (
-                        self.scroll_area.horizontalScrollBar().value()
-                    )
-                    self.pan_scroll_start_v = (
-                        self.scroll_area.verticalScrollBar().value()
-                    )
-                self.setCursor(Qt.ClosedHandCursor)
-            return
-
-        # Check if ROI Manual Mode is active - places multiple ROI markers (position picking only, no SFR calc)
-        if (
-            self.parent_window
-            and hasattr(self.parent_window, "roi_manual_mode")
-            and self.parent_window.roi_manual_mode
-        ):
-            if event.button() == Qt.LeftButton:
-                click_pos = event.pos()
-
-                # Get size from parent window (same as click select size)
-                size = 40
-                if self.parent_window and hasattr(
-                    self.parent_window, "click_select_size"
-                ):
-                    size = self.parent_window.click_select_size
-
-                half_size = size // 2
-
-                # Calculate region centered at click point
-                center_x = int(click_pos.x() / self.zoom_level)
-                center_y = int(click_pos.y() / self.zoom_level)
-
-                x = max(0, center_x - half_size)
-                y = max(0, center_y - half_size)
-                w = size
-                h = size
-
-                # Ensure within image bounds
-                if x + w > self.image_w:
-                    x = max(0, self.image_w - size)
-                if y + h > self.image_h:
-                    y = max(0, self.image_h - size)
-
-                # ROI Plan Mode: Just store position, no SFR calculation
-                # SFR will be calculated when user applies the saved config
-                roi_num = len(self.roi_markers) + 1
-                roi_name = f"ROI_{roi_num}"
-                # Store with None for sfr_value - will be calculated on apply
-                self.roi_markers.append((x, y, w, h, roi_name, None))
-
-                # Also update parent's roi_markers list
-                if self.parent_window and hasattr(self.parent_window, "roi_markers"):
-                    self.parent_window.roi_markers.append((x, y, w, h, roi_name, None))
-                    # Enable ROI Save button since we now have markers
-                    if hasattr(self.parent_window, "ui"):
-                        self.parent_window.ui.btn_roi_map_save.setEnabled(True)
-
-                # Update display
-                self.update()
-
-                # Show info - position only, no SFR in plan mode
-                if self.parent_window:
-                    total = len(self.roi_markers)
-                    self.parent_window.statusBar().showMessage(
-                        f"📍 {roi_name} placed at ({x},{y}) {w}×{h} | Total: {total} ROI(s) - Click to add more"
-                    )
-            return
-
-        # SFR mode: Get current selection mode from parent window
-        if self.parent_window and hasattr(self.parent_window, "selection_mode"):
-            current_mode = self.parent_window.selection_mode
-        else:
-            current_mode = "drag"
-
-        if current_mode == "click":
-            # Mode 2: Click with user-defined size - Single click to select area centered at click point
-            if event.button() == Qt.LeftButton:
-                # Clear any old drag selection when new click happens
-                self.is_selecting = False
-                self.selection_start = None
-                self.selection_end = None
-
-                click_pos = event.pos()
-
-                # Get size from parent window (default 30)
-                size = 30
-                if self.parent_window and hasattr(
-                    self.parent_window, "click_select_size"
-                ):
-                    size = self.parent_window.click_select_size
-
-                half_size = size // 2  # Half size for centering
-
-                # Calculate region centered at click point
-                center_x = int(click_pos.x() / self.zoom_level)
-                center_y = int(click_pos.y() / self.zoom_level)
-
-                # Area centered at click: half_size pixels on each side
-                x = max(0, center_x - half_size)
-                y = max(0, center_y - half_size)
-                w = size
-                h = size
-
-                # Ensure within image bounds
-                if x + w > self.image_w:
-                    x = max(0, self.image_w - size)
-                if y + h > self.image_h:
-                    y = max(0, self.image_h - size)
-
-                # Store selection rectangle for drawing
-                self.selection_rect = QRect(x, y, w, h)
-
-                # Update selection info
-                self.selection_info_text = f"Selected Area: {w}×{h} at ({x}, {y})"
-                self.update()
-
-                # Create rectangle and call callback
-                rect = QRect(x, y, w, h)
-                if self.roi_callback:
-                    self.roi_callback(rect)
-        else:
-            # Mode 1: Drag Select (original behavior)
-            if event.button() == Qt.LeftButton and self.pixmap_original:
-                # Clear old click selection when new drag starts
-                self.selection_rect = None
-
-                self.selection_start = event.pos()
-                self.selection_end = event.pos()
-                self.is_selecting = True
-                self.update()
-
-    def mouseMoveEvent(self, event):
-        # Check if panning (right-click drag or VIEW mode)
-        if self.is_panning and self.scroll_area and self.pan_start_pos:
-            delta = event.pos() - self.pan_start_pos
-            self.scroll_area.horizontalScrollBar().setValue(
-                self.pan_scroll_start_h - delta.x()
-            )
-            self.scroll_area.verticalScrollBar().setValue(
-                self.pan_scroll_start_v - delta.y()
-            )
-            return
-
-        if self.is_selecting and self.pixmap_original:
-            self.selection_end = event.pos()
-            self.update()
-
-    def mouseReleaseEvent(self, event):
-        # Check if releasing from panning (right-click or left-click in VIEW mode)
-        if (
-            event.button() == Qt.RightButton or event.button() == Qt.LeftButton
-        ) and self.is_panning:
-            self.is_panning = False
-            self.pan_start_pos = None
-            # Restore cursor based on view mode
-            if self.parent_window and hasattr(self.parent_window, "view_mode"):
-                if self.parent_window.view_mode == "view":
-                    self.setCursor(Qt.OpenHandCursor)
-                else:
-                    self.setCursor(Qt.ArrowCursor)
-            else:
-                self.setCursor(Qt.ArrowCursor)
-            return
-
-        if event.button() == Qt.LeftButton and self.is_selecting:
-            self.is_selecting = False
-            if self.roi_callback:
-                self.roi_callback(self.get_roi_rect())
-            self.update()
-
-    def paintEvent(self, event):
-        """Override paintEvent to draw selection square and crosshair"""
-        super().paintEvent(event)
-
-        # Create single painter for all drawing operations
-        painter = QPainter(self)
-
-        # Draw drag selection rectangle
-        if self.is_selecting and self.selection_start and self.selection_end:
-            painter.setPen(QPen(QColor(255, 0, 0), 2, Qt.DashLine))
-
-            # Draw rectangle directly at current mouse positions (already in zoomed space)
-            rect = QRect(self.selection_start, self.selection_end).normalized()
-            painter.drawRect(rect)
-
-        # Draw click selection square
-        if self.selection_rect and self.pixmap_scaled:
-            # Scale rectangle to current zoom level
-            scaled_rect = QRect(
-                int(self.selection_rect.x() * self.zoom_level),
-                int(self.selection_rect.y() * self.zoom_level),
-                int(self.selection_rect.width() * self.zoom_level),
-                int(self.selection_rect.height() * self.zoom_level),
-            )
-
-            # Draw red rectangle outline
-            pen = QPen(QColor(255, 0, 0))  # Red
-            pen.setWidth(2)
-            painter.setPen(pen)
-            painter.drawRect(scaled_rect)
-
-            # Draw corner markers
-            corner_size = 5
-            for corner in [
-                (scaled_rect.left(), scaled_rect.top()),
-                (scaled_rect.right(), scaled_rect.top()),
-                (scaled_rect.left(), scaled_rect.bottom()),
-                (scaled_rect.right(), scaled_rect.bottom()),
-            ]:
-                painter.drawEllipse(
-                    corner[0] - corner_size,
-                    corner[1] - corner_size,
-                    corner_size * 2,
-                    corner_size * 2,
-                )
-
-        # Draw green crosshair at image center
-        if self.pixmap_scaled:
-            # Calculate center point in display coordinates
-            center_x = self.pixmap_scaled.width() // 2
-            center_y = self.pixmap_scaled.height() // 2
-
-            # Draw crosshair
-            pen = QPen(QColor(0, 255, 0))  # Green
-            pen.setWidth(1)
-            painter.setPen(pen)
-
-            # Vertical line
-            painter.drawLine(center_x, 0, center_x, self.pixmap_scaled.height())
-
-            # Horizontal line
-            painter.drawLine(0, center_y, self.pixmap_scaled.width(), center_y)
-
-        # Draw SFR value at top-left corner of ROI
-        if self.roi_sfr_value is not None and self.roi_position is not None:
-            x, y, w, h = self.roi_position
-
-            # Convert to display coordinates with zoom
-            roi_top_left_x = int(x * self.zoom_level)
-            roi_top_left_y = int((y + 5) * self.zoom_level)
-
-            # Prepare SFR text (show as percentage with 2 decimal places)
-            sfr_text = f"{self.roi_sfr_value*100:.2f}%"
-
-            # Setup font for text
-            from PyQt5.QtGui import QFont
-
-            font = QFont("Arial", 12)
-            font.setBold(True)
-            painter.setFont(font)
-
-            # Calculate text size
-            metrics = painter.fontMetrics()
-            text_width = metrics.horizontalAdvance(sfr_text)
-            text_height = metrics.height()
-
-            # Position text at top-left corner (slightly offset inside)
-            text_x = roi_top_left_x + 5
-            text_y = roi_top_left_y + text_height + 5
-
-            # Draw semi-transparent background box
-            bg_rect = QRect(
-                text_x - 3, text_y - text_height - 2, text_width + 6, text_height + 4
-            )
-
-            # Draw background (semi-transparent black)
-            painter.fillRect(bg_rect, QColor(0, 0, 0, 200))
-
-            # Draw border (white)
-            painter.setPen(QPen(QColor(255, 255, 255), 1))
-            painter.drawRect(bg_rect)
-
-            # Draw text (white)
-            painter.setPen(QColor(255, 255, 255))
-            painter.drawText(text_x, text_y - 3, sfr_text)
-
-        # Draw ROI markers (for ROI Manual mode and loaded ROIs)
-        if self.roi_markers:
-            from PyQt5.QtGui import QFont
-
-            font = QFont("Arial", 10)
-            font.setBold(True)
-            painter.setFont(font)
-
-            for marker in self.roi_markers:
-                # Handle both 5-tuple (x, y, w, h, name) and 6-tuple (x, y, w, h, name, sfr_value)
-                if len(marker) >= 6:
-                    rx, ry, rw, rh, roi_name, sfr_value = marker[:6]
-                else:
-                    rx, ry, rw, rh, roi_name = marker[:5]
-                    sfr_value = None
-
-                # Convert to display coordinates with zoom
-                disp_x = int(rx * self.zoom_level)
-                disp_y = int(ry * self.zoom_level)
-                disp_w = int(rw * self.zoom_level)
-                disp_h = int(rh * self.zoom_level)
-
-                # Draw ROI rectangle (red color)
-                pen = QPen(QColor(255, 0, 0))  # Red
-                pen.setWidth(2)
-                painter.setPen(pen)
-                painter.drawRect(disp_x, disp_y, disp_w, disp_h)
-
-                # Prepare label text - two lines: "ROI:" and "{value}"
-                metrics = painter.fontMetrics()
-                line_height = metrics.height()
-
-                if sfr_value is not None:
-                    line1 = f"{roi_name}:"
-                    line2 = f"{sfr_value*100:.2f}%"
-                else:
-                    line1 = roi_name
-                    line2 = None
-
-                # Calculate text dimensions
-                line1_width = metrics.horizontalAdvance(line1)
-                line2_width = metrics.horizontalAdvance(line2) if line2 else 0
-                max_text_width = max(line1_width, line2_width)
-                total_height = line_height * 2 if line2 else line_height
-
-                # Position text at top of ROI rectangle (inside, at top-left)
-                text_x = disp_x + 3
-                text_y = disp_y + line_height + 2
-
-                # Draw semi-transparent background for label
-                bg_rect = QRect(
-                    text_x - 2, disp_y + 2, max_text_width + 6, total_height + 4
-                )
-                painter.fillRect(bg_rect, QColor(255, 0, 0, 200))  # Red background
-
-                # Draw first line (ROI name)
-                painter.setPen(QColor(255, 255, 255))
-                painter.drawText(text_x, text_y, line1)
-
-                # Draw second line (SFR value) if available
-                if line2:
-                    painter.drawText(text_x, text_y + line_height, line2)
-
-        # End painter properly
-        painter.end()
-
-    def wheelEvent(self, event):
-        """Handle mouse wheel for zooming"""
-        if self.pixmap_original is None:
-            return
-
-        # Get scroll direction
-        delta = event.angleDelta().y()
-
-        # Zoom in/out based on scroll direction
-        if delta > 0:
-            # Scroll up - zoom in
-            self.zoom_level *= 1.1
-        else:
-            # Scroll down - zoom out
-            self.zoom_level /= 1.1
-
-        # Limit zoom level
-        self.zoom_level = max(0.5, min(self.zoom_level, 5.0))
-
-        # Update display
-        self.update_zoomed_image()
-
-    def update_zoomed_image(self):
-        """Update the displayed image with current zoom level"""
-        if self.pixmap_original is None or self._updating_zoom:
-            return
-
-        # Set guard flag to prevent recursion
-        self._updating_zoom = True
-
-        try:
-            # Calculate new size
-            new_width = int(self.pixmap_original.width() * self.zoom_level)
-            new_height = int(self.pixmap_original.height() * self.zoom_level)
-
-            # Scale the pixmap maintaining aspect ratio
-            self.pixmap_scaled = self.pixmap_original.scaled(
-                new_width, new_height, Qt.KeepAspectRatio, Qt.SmoothTransformation
-            )
-            self.setPixmap(self.pixmap_scaled)
-
-            # Update size to enable/show scrollbars
-            self.setFixedSize(new_width, new_height)
-        finally:
-            # Always clear guard flag
-            self._updating_zoom = False
-
-    def set_roi_sfr_display(self, sfr_value, roi_x, roi_y, roi_w, roi_h):
-        """Set SFR value and ROI position to display at top-right corner"""
-        self.roi_sfr_value = sfr_value
-        self.roi_position = (roi_x, roi_y, roi_w, roi_h)
-        self.update()  # Trigger repaint
-
-    def get_roi_rect(self):
-        """Get ROI rectangle in image coordinates"""
-        if not self.selection_start or not self.selection_end:
-            return QRect()
-
-        # Get selected rectangle in display coordinates
-        rect = QRect(self.selection_start, self.selection_end).normalized()
-
-        # Account for scroll position if zoomed
-        if self.scroll_area and self.zoom_level != 1.0:
-            scroll_x = self.scroll_area.horizontalScrollBar().value()
-            scroll_y = self.scroll_area.verticalScrollBar().value()
-            rect.translate(scroll_x, scroll_y)
-
-        # Convert back to original image coordinates
-        if self.zoom_level != 1.0:
-            rect = QRect(
-                int(rect.x() / self.zoom_level),
-                int(rect.y() / self.zoom_level),
-                int(rect.width() / self.zoom_level),
-                int(rect.height() / self.zoom_level),
-            )
-        return rect
+# Import from local modules
+from constants import RAW_FORMAT_OPTIONS, COMMON_RAW_SIZES
+from image_label import ImageLabel
+from mainUI import Ui_MainWindow
+from sfr_calculator import SFRCalculator
+from utils import auto_detect_raw_dimensions, read_raw_image, remove_inactive_borders
+
+from constants import MAX_FILE_SIZE_MB, EPSILON
 
 
 class MainWindow(QMainWindow):
     RECENT_FILES_PATH = "recent_files.json"
 
-    # Common raw image format options: (width, height, bytes_per_pixel, dtype_name, display_name)
-    RAW_FORMAT_OPTIONS = [
-        # Auto detect option
-        (0, 0, 0, "auto", "Auto Detect"),
-        # Sensor common sizes - 16-bit
-        (4000, 3000, 2, "uint16", "4000×3000 16bit (12MP)"),
-        (4032, 3024, 2, "uint16", "4032×3024 16bit (12MP iPhone)"),
-        (4608, 3456, 2, "uint16", "4608×3456 16bit (16MP)"),
-        (4624, 3472, 2, "uint16", "4624×3472 16bit (Sony IMX)"),
-        (4656, 3496, 2, "uint16", "4656×3496 16bit (Sony IMX)"),
-        (5184, 3888, 2, "uint16", "5184×3888 16bit (20MP)"),
-        (5472, 3648, 2, "uint16", "5472×3648 16bit (20MP)"),
-        (6000, 4000, 2, "uint16", "6000×4000 16bit (24MP)"),
-        (6016, 4016, 2, "uint16", "6016×4016 16bit (Sony A7)"),
-        (6048, 4024, 2, "uint16", "6048×4024 16bit (Sony)"),
-        (7952, 5304, 2, "uint16", "7952×5304 16bit (Canon 5D)"),
-        (8192, 5464, 2, "uint16", "8192×5464 16bit (Canon R5)"),
-        (8256, 5504, 2, "uint16", "8256×5504 16bit (45MP)"),
-        (9504, 6336, 2, "uint16", "9504×6336 16bit (60MP)"),
-        # Video/display resolutions - 16-bit
-        (640, 480, 2, "uint16", "640×480 16bit (VGA)"),
-        (640, 640, 2, "uint16", "640×640 16bit (Square)"),
-        (800, 600, 2, "uint16", "800×600 16bit (SVGA)"),
-        (1024, 768, 2, "uint16", "1024×768 16bit (XGA)"),
-        (1280, 720, 2, "uint16", "1280×720 16bit (HD 720p)"),
-        (1920, 1080, 2, "uint16", "1920×1080 16bit (Full HD)"),
-        (2048, 1536, 2, "uint16", "2048×1536 16bit (3MP)"),
-        (2560, 1440, 2, "uint16", "2560×1440 16bit (QHD)"),
-        (2592, 1944, 2, "uint16", "2592×1944 16bit (5MP)"),
-        (3264, 2448, 2, "uint16", "3264×2448 16bit (8MP)"),
-        (3840, 2160, 2, "uint16", "3840×2160 16bit (4K UHD)"),
-        (4096, 2160, 2, "uint16", "4096×2160 16bit (4K DCI)"),
-        # Square sizes - 16-bit
-        (256, 256, 2, "uint16", "256×256 16bit"),
-        (512, 512, 2, "uint16", "512×512 16bit"),
-        (1024, 1024, 2, "uint16", "1024×1024 16bit"),
-        (2048, 2048, 2, "uint16", "2048×2048 16bit"),
-        (4096, 4096, 2, "uint16", "4096×4096 16bit"),
-        # 8-bit versions
-        (640, 480, 1, "uint8", "640×480 8bit (VGA)"),
-        (640, 640, 1, "uint8", "640×640 8bit (Square)"),
-        (640, 1920, 1, "uint8", "640×1920 8bit"),
-        (640, 641, 1, "uint8", "640×641 8bit"),
-        (800, 600, 1, "uint8", "800×600 8bit (SVGA)"),
-        (1024, 768, 1, "uint8", "1024×768 8bit (XGA)"),
-        (1280, 720, 1, "uint8", "1280×720 8bit (HD 720p)"),
-        (1920, 1080, 1, "uint8", "1920×1080 8bit (Full HD)"),
-        (2048, 1536, 1, "uint8", "2048×1536 8bit (3MP)"),
-        (2592, 1944, 1, "uint8", "2592×1944 8bit (5MP)"),
-        (3264, 2448, 1, "uint8", "3264×2448 8bit (8MP)"),
-        (4032, 3024, 1, "uint8", "4032×3024 8bit (12MP)"),
-        (4096, 2160, 1, "uint8", "4096×2160 8bit (4K)"),
-        (256, 256, 1, "uint8", "256×256 8bit"),
-        (512, 512, 1, "uint8", "512×512 8bit"),
-        (1024, 1024, 1, "uint8", "1024×1024 8bit"),
-        (2048, 2048, 1, "uint8", "2048×2048 8bit"),
-        (4096, 4096, 1, "uint8", "4096×4096 8bit"),
-    ]
+    # Use RAW_FORMAT_OPTIONS from constants module
+    RAW_FORMAT_OPTIONS = RAW_FORMAT_OPTIONS
 
     def __init__(self):
         super().__init__()
@@ -1316,9 +83,7 @@ class MainWindow(QMainWindow):
         # Edge detection display mode
         self.edge_detect_enabled = False  # Show edge overlay on image
         self.edge_overlay_applied = False  # Track if edge overlay is applied
-        self.locked_edge_mask = (
-            None  # Store locked edge pattern (frozen when Apply Edge clicked)
-        )
+        self.locked_edge_mask = None  # Store locked edge pattern
 
         # Nyquist frequency (0.1 to 1.0)
         self.ny_frequency = 0.5
@@ -1334,6 +99,9 @@ class MainWindow(QMainWindow):
         self.recent_roi_files = []
         self.max_recent_roi_files = 10
         self.RECENT_ROI_FILES_PATH = "recent_roi_files.json"
+
+        # Track loaded ROI file path
+        self.loaded_roi_file_path = None
 
         self.load_recent_files()
         self.load_recent_roi_files()
@@ -1410,29 +178,22 @@ class MainWindow(QMainWindow):
         self.figure.patch.set_facecolor("white")
         self.canvas = FigureCanvas(self.figure)
 
-        # Set size policy to allow the canvas to shrink/expand properly
-        from PyQt5.QtWidgets import QSizePolicy
-
         self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.canvas.updateGeometry()
 
-        # Create a layout for the placeholder and add the canvas
         canvas_layout = QVBoxLayout(self.ui.canvas_placeholder)
         canvas_layout.setContentsMargins(0, 0, 0, 0)
         canvas_layout.addWidget(self.canvas)
 
-        # Set the placeholder to expand properly with max width
         self.ui.canvas_placeholder.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Expanding
         )
 
-        # 2x2 subplot layout:
-        # (0,0) = SFR/MTF  |  (0,1) = ROI Image
-        # (1,0) = ESF      |  (1,1) = LSF
-        self.ax_sfr = self.figure.add_subplot(2, 2, 1)  # Top-left
-        self.ax_roi = self.figure.add_subplot(2, 2, 2)  # Top-right (ROI image)
-        self.ax_esf = self.figure.add_subplot(2, 2, 3)  # Bottom-left
-        self.ax_lsf = self.figure.add_subplot(2, 2, 4)  # Bottom-right
+        # 2x2 subplot layout
+        self.ax_sfr = self.figure.add_subplot(2, 2, 1)
+        self.ax_roi = self.figure.add_subplot(2, 2, 2)
+        self.ax_esf = self.figure.add_subplot(2, 2, 3)
+        self.ax_lsf = self.figure.add_subplot(2, 2, 4)
 
         self.ax_sfr.set_title("SFR / MTF Result", fontsize=11, fontweight="bold")
         self.ax_sfr.set_xlabel("Frequency (cycles/pixel)", fontsize=10)
@@ -1440,25 +201,19 @@ class MainWindow(QMainWindow):
         self.ax_sfr.grid(True, alpha=0.3)
 
         self.ax_roi.set_title("ROI Image", fontsize=10, fontweight="bold")
-        self.ax_roi.axis("off")  # Hide axes for image display
+        self.ax_roi.axis("off")
 
-        self.ax_esf.set_title(
-            "ESF (Edge Spread Function)", fontsize=10, fontweight="bold"
-        )
+        self.ax_esf.set_title("ESF (Edge Spread Function)", fontsize=10, fontweight="bold")
         self.ax_esf.set_xlabel("Position (pixels)", fontsize=9)
         self.ax_esf.set_ylabel("Intensity", fontsize=9)
         self.ax_esf.grid(True, alpha=0.3)
 
-        self.ax_lsf.set_title(
-            "LSF (Line Spread Function)", fontsize=10, fontweight="bold"
-        )
+        self.ax_lsf.set_title("LSF (Line Spread Function)", fontsize=10, fontweight="bold")
         self.ax_lsf.set_xlabel("Position (pixels)", fontsize=9)
         self.ax_lsf.set_ylabel("Derivative", fontsize=9)
         self.ax_lsf.grid(True, alpha=0.3)
 
         self.figure.tight_layout()
-
-        # Connect resize event to update figure layout
         self.canvas.mpl_connect("resize_event", self.on_canvas_resize)
 
     def on_canvas_resize(self, event):
@@ -1480,31 +235,57 @@ class MainWindow(QMainWindow):
         except Exception as e:
             print(f"Failed to save recent files: {e}")
 
+    def load_recent_files(self):
+        try:
+            with open(self.RECENT_FILES_PATH, "r") as f:
+                self.recent_files = json.load(f)
+        except Exception:
+            self.recent_files = []
+
+    def add_to_recent_files(self, file_path):
+        if file_path in self.recent_files:
+            self.recent_files.remove(file_path)
+        self.recent_files.insert(0, file_path)
+        if len(self.recent_files) > self.max_recent_files:
+            self.recent_files = self.recent_files[: self.max_recent_files]
+        self.update_recent_files_list()
+        self.save_recent_files()
+
+    def update_recent_files_list(self):
+        self.ui.recent_files_combo.clear()
+        self.ui.recent_files_combo.addItem("-- Select Recent File --")
+        for f in self.recent_files:
+            filename = os.path.basename(f)
+            self.ui.recent_files_combo.addItem(filename, f)
+
+    def on_recent_file_selected(self, index):
+        if index <= 0:
+            return
+        file_path = self.ui.recent_files_combo.itemData(index)
+        if file_path and os.path.exists(file_path):
+            self.load_raw_file_from_path(file_path)
+            self.ui.recent_files_combo.setCurrentIndex(0)
+        elif file_path:
+            QMessageBox.warning(self, "File Not Found", f"File not found: {file_path}")
+            self.recent_files.remove(file_path)
+            self.update_recent_files_list()
+            self.save_recent_files()
+
     # ==================== ROI File Management ====================
 
     def get_roi_file_path(self, image_path=None):
         """
         Get the ROI file path for the given or current image.
         ROI file uses same basename as image with .roi extension.
-
-        Parameters:
-        - image_path: Path to image file (uses current_image_path if None)
-
-        Returns:
-        - str: Path to .roi file, or None if no image loaded
         """
         if image_path is None:
             image_path = self.current_image_path
         if image_path is None:
             return None
-
-        # Replace extension with .roi
         base_path = os.path.splitext(image_path)[0]
         return f"{base_path}.roi"
 
-    def save_roi_file(
-        self, roi_x, roi_y, roi_w, roi_h, edge_type="Unknown", confidence=0.0
-    ):
+    def save_roi_file(self, roi_x, roi_y, roi_w, roi_h, edge_type="Unknown", confidence=0.0):
         """
         Save current ROI configuration to a .roi JSON file.
 
@@ -2422,68 +1203,8 @@ class MainWindow(QMainWindow):
             elif "32bit" in basename.lower() or "float" in basename.lower():
                 bit_hint = 4
 
-        # Strategy 2: Common raw image dimensions to check
-        # 8-bit formats scanned first (more common for processed images)
-        common_sizes = [
-            # (width, height, bytes_per_pixel, dtype_name)
-            # 8-bit versions first
-            (640, 480, 1, "uint8"),  # VGA
-            (640, 640, 1, "uint8"),  # Square
-            (640, 641, 1, "uint8"),
-            (800, 600, 1, "uint8"),  # SVGA
-            (1024, 768, 1, "uint8"),  # XGA
-            (1280, 720, 1, "uint8"),  # HD 720p
-            (1920, 1080, 1, "uint8"),  # Full HD
-            (2048, 1536, 1, "uint8"),  # 3MP
-            (2592, 1944, 1, "uint8"),  # 5MP
-            (3264, 2448, 1, "uint8"),  # 8MP
-            (4032, 3024, 1, "uint8"),  # 12MP
-            (4096, 2160, 1, "uint8"),  # 4K
-            (256, 256, 1, "uint8"),  # Square test
-            (640, 1920, 1, "uint8"),  # Innorev Tester
-            (512, 512, 1, "uint8"),
-            (1024, 1024, 1, "uint8"),
-            (2048, 2048, 1, "uint8"),
-            (4096, 4096, 1, "uint8"),
-            # Sensor common sizes - 16-bit (raw sensor data)
-            (4000, 3000, 2, "uint16"),  # 12MP sensor
-            (4032, 3024, 2, "uint16"),  # 12MP iPhone
-            (4608, 3456, 2, "uint16"),  # 16MP
-            (4624, 3472, 2, "uint16"),  # Sony IMX
-            (4656, 3496, 2, "uint16"),  # Sony IMX
-            (5184, 3888, 2, "uint16"),  # 20MP
-            (5472, 3648, 2, "uint16"),  # 20MP
-            (6000, 4000, 2, "uint16"),  # 24MP
-            (6016, 4016, 2, "uint16"),  # Sony A7
-            (6048, 4024, 2, "uint16"),  # Sony
-            (8256, 5504, 2, "uint16"),  # 45MP
-            (8192, 5464, 2, "uint16"),  # Canon R5
-            (7952, 5304, 2, "uint16"),  # Canon 5D
-            (9504, 6336, 2, "uint16"),  # 60MP
-            # Video/display resolutions - 16-bit
-            (640, 480, 2, "uint16"),
-            (640, 640, 2, "uint16"),
-            (800, 600, 2, "uint16"),
-            (1024, 768, 2, "uint16"),
-            (1280, 720, 2, "uint16"),  # HD 720p
-            (1920, 1080, 2, "uint16"),  # Full HD
-            (2048, 1536, 2, "uint16"),  # 3MP
-            (2560, 1440, 2, "uint16"),  # QHD
-            (2592, 1944, 2, "uint16"),  # 5MP
-            (3264, 2448, 2, "uint16"),  # 8MP
-            (3840, 2160, 2, "uint16"),  # 4K UHD
-            (4096, 2160, 2, "uint16"),  # 4K DCI
-            # Square sizes - 16-bit (common for test patterns)
-            (256, 256, 2, "uint16"),
-            (512, 512, 2, "uint16"),
-            (640, 640, 2, "uint16"),
-            (1024, 1024, 2, "uint16"),
-            (2048, 2048, 2, "uint16"),
-            (4096, 4096, 2, "uint16"),
-        ]
-
-        # Check each common size
-        for w, h, bpp, dtype_name in common_sizes:
+        # Strategy 2: Check common sizes from constants
+        for w, h, bpp, dtype_name in COMMON_RAW_SIZES:
             expected_size = w * h * bpp
             if file_size == expected_size:
                 return (w, h, dtype_name)

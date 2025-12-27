@@ -4,9 +4,9 @@ A professional-grade Spatial Frequency Response (SFR) / Modulation Transfer Func
 
 ## 🎯 Project Status
 
-**Status**: Production Ready ✅  
-**Version**: 2.4  
-**Last Updated**: December 5, 2025  
+**Status**: Production Ready ✅
+**Version**: 2.4
+**Last Updated**: December 5, 2025
 **GitHub**: https://github.com/samlai1030/pyTools_ResoLab
 
 ---
@@ -139,7 +139,7 @@ Download the pre-built `.dmg` from [Releases](https://github.com/samlai1030/pyTo
 2. **Set Dimensions**: Enter width, height, and data type (if not auto-detected)
 3. **Select Mode**: Choose `Drag Select` or `Click` for ROI selection
 4. **Select ROI**: Click/drag on a slant edge in the image
-5. **View Results**: 
+5. **View Results**:
    - 2×2 plot displays ESF, LSF, SFR, and ROI image
    - Status bar shows edge type, confidence, MTF50, SFR@Ny/4
 6. **Adjust Settings**:
@@ -158,26 +158,53 @@ Download the pre-built `.dmg` from [Releases](https://github.com/samlai1030/pyTo
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ Project Structure
 
 ```
 pyTools_ResoLab/
-├── main.py              # Main application (MainWindow, ImageLabel, SFRCalculator)
-├── mainUI.py            # Generated UI code (from pyuic5)
-├── mainUI.ui            # Qt Designer UI file
-├── requirements.txt     # Python dependencies
-├── recent_files.json    # Persistent recent files list
-└── README.md            # This file
+├── main.py                 # Main application entry point (MainWindow class)
+├── mainUI.py               # Generated UI code (from pyuic5)
+├── mainUI.ui               # Qt Designer UI file
+│
+├── constants.py            # Application constants and configuration
+│   ├── SUPERSAMPLING_FACTOR, EPSILON, MAX_FILE_SIZE_MB
+│   ├── RAW_FORMAT_OPTIONS  # UI dropdown options for raw formats
+│   └── COMMON_RAW_SIZES    # Auto-detection dimension list
+│
+├── utils.py                # Utility functions for file I/O
+│   ├── read_raw_image()    # Read raw image with validation
+│   ├── remove_inactive_borders()  # Crop black borders
+│   └── auto_detect_raw_dimensions()  # Auto-detect W×H from file
+│
+├── sfr_calculator.py       # ISO 12233:2023 SFR/MTF computation
+│   ├── _apply_lsf_smoothing()  # LSF smoothing methods
+│   ├── detect_edge_orientation()  # V-Edge / H-Edge detection
+│   ├── validate_edge()     # Edge validation with threshold
+│   ├── standardize_roi_orientation()  # ROI orientation normalization
+│   └── calculate_sfr()     # Main SFR calculation algorithm
+│
+├── image_label.py          # Custom QLabel widget for image display
+│   ├── Mouse event handlers (drag/click/pan)
+│   ├── Zoom with mouse wheel (0.5x - 5.0x)
+│   ├── ROI selection (drag rectangle / click square)
+│   └── ROI markers display with SFR values
+│
+├── requirements.txt        # Python dependencies
+├── recent_files.json       # Persistent recent files list
+├── recent_roi_files.json   # Persistent recent ROI files list
+└── README.md               # This file
 ```
 
 ### Core Components
 
-| Component | Description |
-|-----------|-------------|
-| `SFRCalculator` | Static class for ISO 12233:2023 SFR/MTF computation |
-| `ImageLabel` | Custom QLabel with zoom, pan, ROI selection |
-| `MainWindow` | Main application window with UI controls |
-| `Ui_MainWindow` | Auto-generated UI from Qt Designer |
+| Component | File | Description |
+|-----------|------|-------------|
+| `MainWindow` | `main.py` | Main application window with UI controls and event handling |
+| `SFRCalculator` | `sfr_calculator.py` | Static class for ISO 12233:2023 SFR/MTF computation |
+| `ImageLabel` | `image_label.py` | Custom QLabel with zoom, pan, ROI selection |
+| `Ui_MainWindow` | `mainUI.py` | Auto-generated UI from Qt Designer |
+| Constants | `constants.py` | Application-wide constants and format options |
+| Utilities | `utils.py` | File I/O and image preprocessing functions |
 
 ---
 
@@ -252,6 +279,5 @@ MIT License
 
 ## 👤 Author
 
-**Sam Lai**  
+**Sam Lai**
 GitHub: [@samlai1030](https://github.com/samlai1030)
-
